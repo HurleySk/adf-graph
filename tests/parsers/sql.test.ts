@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { join } from "path";
 import { scanSqlDirectory } from "../../src/parsers/sql.js";
 
-const fixtureDir = join(import.meta.dirname, "../fixtures/sql");
+const fixtureDir = join(import.meta.dirname, "../fixtures/SQL DB/test-project");
 
 describe("scanSqlDirectory", () => {
   it("discovers stored procedures (1 SP: stored_procedure:dbo.p_Transform_Org)", () => {
