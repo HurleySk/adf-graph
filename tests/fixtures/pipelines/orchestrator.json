@@ -1,0 +1,54 @@
+{
+  "name": "Test_Orchestrator",
+  "properties": {
+    "activities": [
+      {
+        "name": "Run Copy To Staging",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Staging",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Run SP Transform",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          {
+            "activity": "Run Copy To Staging",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "SP_Transform",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Run Copy To Dataverse",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          {
+            "activity": "Run SP Transform",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Dataverse",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

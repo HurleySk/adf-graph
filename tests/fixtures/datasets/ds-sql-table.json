@@ -1,0 +1,29 @@
+{
+  "name": "ds_sql_staging",
+  "properties": {
+    "type": "AzureSqlTable",
+    "linkedServiceName": {
+      "referenceName": "ls_sql_staging",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "schema_name": {
+        "type": "String"
+      },
+      "table_name": {
+        "type": "String"
+      }
+    },
+    "typeProperties": {
+      "schema": {
+        "value": "@dataset().schema_name",
+        "type": "Expression"
+      },
+      "table": {
+        "value": "@dataset().table_name",
+        "type": "Expression"
+      }
+    },
+    "annotations": []
+  }
+}
