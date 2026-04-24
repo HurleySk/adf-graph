@@ -19,17 +19,6 @@ export function extractTablesFromSql(sql: string): string[] {
   return results;
 }
 
-function resolveStringOrExpression(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object") {
-    const v = value as Record<string, unknown>;
-    if (typeof v.value === "string" && v.type === "Expression") {
-      return null; // dynamic expression — skip
-    }
-  }
-  return null;
-}
-
 function normalizeSpName(raw: string): string {
   // [dbo].[p_Transform_Org] → dbo.p_Transform_Org
   return raw.replace(/\[/g, "").replace(/\]/g, "");
@@ -207,7 +196,7 @@ function processDatasetParams(
   const edgeType = direction === "reads_from" ? EdgeType.ReadsFrom : EdgeType.WritesTo;
 
   const entityName = params.entity_name;
-  if (typeof entityName === "string") {
+  if (typeof entityName === "string" && !entityName.startsWith("@")) {
     edges.push({
       from: activityId,
       to: `${NodeType.DataverseEntity}:${entityName}`,
@@ -218,7 +207,7 @@ function processDatasetParams(
 
   const tableName = params.table_name;
   const schemaName = params.schema_name;
-  if (typeof tableName === "string") {
+  if (typeof tableName === "string" && !tableName.startsWith("@")) {
     const schema = typeof schemaName === "string" ? schemaName : "dbo";
     edges.push({
       from: activityId,

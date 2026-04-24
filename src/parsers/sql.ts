@@ -1,6 +1,6 @@
 import { readdirSync, statSync, existsSync } from "fs";
 import { join, basename, extname } from "path";
-import { GraphNode, NodeType } from "../graph/model.js";
+import { GraphNode, GraphEdge, NodeType } from "../graph/model.js";
 import { ParseResult } from "./pipeline.js";
 
 export { ParseResult };
@@ -71,7 +71,7 @@ function collectFromNamedDirs(
  */
 export function scanSqlDirectory(sqlRoot: string): ParseResult {
   const nodes: GraphNode[] = [];
-  const edges = [];
+  const edges: GraphEdge[] = [];
   const warnings: string[] = [];
 
   if (!existsSync(sqlRoot)) {
