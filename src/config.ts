@@ -98,5 +98,10 @@ function validateConfig(raw: unknown, source: string): AdfGraphConfig {
   if (Object.keys(environments).length === 0) {
     throw new Error(`adf-graph: config '${source}' must define at least one environment`);
   }
+  const defaults = Object.entries(environments).filter(([, e]) => e.default);
+  if (defaults.length > 1) {
+    const names = defaults.map(([n]) => n).join(", ");
+    throw new Error(`adf-graph: config '${source}' has multiple default environments (${names}). Only one is allowed.`);
+  }
   return { environments };
 }
