@@ -41,11 +41,12 @@ export function parsePipelineFile(json: unknown): ParseResult {
 
   // Pipeline node
   const pipelineId = `${NodeType.Pipeline}:${pipelineName}`;
+  const paramDefs = (properties?.parameters as Record<string, unknown>) ?? {};
   nodes.push({
     id: pipelineId,
     type: NodeType.Pipeline,
     name: pipelineName,
-    metadata: {},
+    metadata: { parameters: Object.keys(paramDefs) },
   });
 
   for (const act of activities) {

@@ -29,8 +29,9 @@ function merge(graph: Graph, result: ParseResult): void {
 
 /**
  * Infer NodeType from an ID prefix (e.g., "pipeline:Foo" → NodeType.Pipeline).
+ * Returns null for unknown prefixes (e.g., "linked_service:") — caller should skip.
  */
-function inferNodeType(id: string): NodeType {
+function inferNodeType(id: string): NodeType | null {
   const prefix = id.split(":")[0];
   switch (prefix) {
     case "pipeline":
@@ -46,8 +47,7 @@ function inferNodeType(id: string): NodeType {
     case "dataverse_entity":
       return NodeType.DataverseEntity;
     default:
-      // Fall back to Pipeline for unknown prefixes
-      return NodeType.Pipeline;
+      return null;
   }
 }
 
@@ -160,6 +160,7 @@ export function buildGraph(rootPath: string): BuildResult {
   for (const id of referencedIds) {
     if (!graph.getNode(id)) {
       const nodeType = inferNodeType(id);
+      if (!nodeType) continue; // skip unknown prefixes (e.g., linked_service:)
       const name = id.includes(":") ? id.slice(id.indexOf(":") + 1) : id;
       const stub: GraphNode = {
         id,
