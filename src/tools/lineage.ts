@@ -1,0 +1,253 @@
+import { Graph, EdgeType, GraphEdge } from "../graph/model.js";
+
+export type LineageDirection = "upstream" | "downstream";
+
+export interface LineageStep {
+  nodeId: string;
+  nodeType: string;
+  name: string;
+  edgeType: string;
+}
+
+export interface LineagePath {
+  steps: LineageStep[];
+}
+
+export interface ColumnMapping {
+  activityId: string;
+  sourceColumn: string | null;
+  sinkColumn: string | null;
+}
+
+export interface DataLineageResult {
+  entity: string;
+  attribute?: string;
+  direction: LineageDirection;
+  paths: LineagePath[];
+  columnMappings: ColumnMapping[];
+  error?: string;
+}
+
+/**
+ * Convert a GraphEdge[] path into LineageStep[] steps.
+ * For upstream traversal, each step shows the `from` end (going back through the graph).
+ * For downstream traversal, each step shows the `to` end.
+ */
+function pathToSteps(graph: Graph, path: GraphEdge[], direction: LineageDirection): LineageStep[] {
+  return path.map((edge) => {
+    const stepNodeId = direction === "upstream" ? edge.from : edge.to;
+    const stepNode = graph.getNode(stepNodeId);
+    return {
+      nodeId: stepNodeId,
+      nodeType: stepNode?.type ?? "unknown",
+      name: stepNode?.name ?? stepNodeId,
+      edgeType: edge.type,
+    };
+  });
+}
+
+/**
+ * Collect all activity nodes reachable by standard BFS traversal.
+ */
+function collectTraversedActivities(graph: Graph, nodeId: string, direction: LineageDirection): string[] {
+  const results = direction === "upstream"
+    ? graph.traverseUpstream(nodeId)
+    : graph.traverseDownstream(nodeId);
+  return results
+    .filter((r) => r.node.id.startsWith("activity:"))
+    .map((r) => r.node.id);
+}
+
+/**
+ * Trace data lineage for a Dataverse entity or table using data-flow semantics:
+ *
+ * Upstream (what feeds this node):
+ *   - Standard graph upstream traversal (follows incoming edges)
+ *   - For each activity found, also includes its data sources (reads_from edges)
+ *
+ * Downstream (what this node feeds into):
+ *   - Finds activities that READ this node (incoming reads_from edges to the node)
+ *   - Then follows those activities downstream to find sinks (writes_to)
+ *   - Also uses standard downstream traversal for nodes with outgoing edges
+ */
+export function handleDataLineage(
+  graph: Graph,
+  entity: string,
+  attribute?: string,
+  direction: LineageDirection = "upstream",
+): DataLineageResult {
+  // Resolve node ID: try dataverse_entity first, then table
+  let nodeId = `dataverse_entity:${entity}`;
+  if (!graph.getNode(nodeId)) {
+    nodeId = `table:${entity}`;
+  }
+
+  const node = graph.getNode(nodeId);
+  if (!node) {
+    return {
+      entity,
+      attribute,
+      direction,
+      paths: [],
+      columnMappings: [],
+      error: `Node for '${entity}' not found as dataverse_entity or table`,
+    };
+  }
+
+  const paths: LineagePath[] = [];
+  const visitedNodes = new Set<string>();
+
+  if (direction === "upstream") {
+    // Standard upstream traversal
+    const traversalResults = graph.traverseUpstream(nodeId);
+
+    for (const r of traversalResults) {
+      if (visitedNodes.has(r.node.id)) continue;
+      visitedNodes.add(r.node.id);
+
+      const steps = pathToSteps(graph, r.path, "upstream");
+      // Add the terminal node
+      steps.push({
+        nodeId: r.node.id,
+        nodeType: r.node.type,
+        name: r.node.name,
+        edgeType: "",
+      });
+
+      // For activity nodes: augment with their data sources (reads_from)
+      if (r.node.id.startsWith("activity:")) {
+        const actOutgoing = graph.getOutgoing(r.node.id);
+        for (const edge of actOutgoing) {
+          if (edge.type === EdgeType.ReadsFrom) {
+            const sourceNode = graph.getNode(edge.to);
+            if (!visitedNodes.has(edge.to)) {
+              // Emit a separate path for each source
+              paths.push({
+                steps: [
+                  ...steps,
+                  {
+                    nodeId: edge.to,
+                    nodeType: sourceNode?.type ?? "unknown",
+                    name: sourceNode?.name ?? edge.to,
+                    edgeType: edge.type,
+                  },
+                ],
+              });
+            }
+          }
+        }
+      }
+
+      paths.push({ steps });
+    }
+  } else {
+    // Downstream: standard traversal from the node
+    const traversalResults = graph.traverseDownstream(nodeId);
+
+    for (const r of traversalResults) {
+      if (visitedNodes.has(r.node.id)) continue;
+      visitedNodes.add(r.node.id);
+
+      const steps = pathToSteps(graph, r.path, "downstream");
+      steps.push({
+        nodeId: r.node.id,
+        nodeType: r.node.type,
+        name: r.node.name,
+        edgeType: "",
+      });
+      paths.push({ steps });
+    }
+
+    // Also find activities that read FROM this node (reads_from reverse linkage)
+    // These represent downstream data consumers not captured by standard traversal
+    const incomingEdges = graph.getIncoming(nodeId);
+    for (const edge of incomingEdges) {
+      if (edge.type !== EdgeType.ReadsFrom) continue;
+      const activityId = edge.from;
+      if (visitedNodes.has(activityId)) continue;
+
+      const actNode = graph.getNode(activityId);
+      if (!actNode) continue;
+
+      // Add the activity itself
+      const actStep: LineageStep = {
+        nodeId: activityId,
+        nodeType: actNode.type,
+        name: actNode.name,
+        edgeType: EdgeType.ReadsFrom,
+      };
+
+      if (!visitedNodes.has(activityId)) {
+        visitedNodes.add(activityId);
+        paths.push({ steps: [actStep] });
+      }
+
+      // Follow writes_to from this activity to find sinks
+      const actOutgoing = graph.getOutgoing(activityId);
+      for (const outEdge of actOutgoing) {
+        if (outEdge.type !== EdgeType.WritesTo) continue;
+        if (visitedNodes.has(outEdge.to)) continue;
+        visitedNodes.add(outEdge.to);
+
+        const sinkNode = graph.getNode(outEdge.to);
+        paths.push({
+          steps: [
+            actStep,
+            {
+              nodeId: outEdge.to,
+              nodeType: sinkNode?.type ?? "unknown",
+              name: sinkNode?.name ?? outEdge.to,
+              edgeType: outEdge.type,
+            },
+          ],
+        });
+      }
+    }
+  }
+
+  // Column-level lineage: scan all activity nodes for maps_column edges
+  const columnMappings: ColumnMapping[] = [];
+  if (attribute !== undefined) {
+    // Gather all activities encountered
+    const allActivityIds = new Set<string>();
+
+    // From paths
+    for (const p of paths) {
+      for (const step of p.steps) {
+        if (step.nodeId.startsWith("activity:")) {
+          allActivityIds.add(step.nodeId);
+        }
+      }
+    }
+
+    // Also from standard traversal
+    const traversedActivityIds = collectTraversedActivities(graph, nodeId, direction);
+    for (const id of traversedActivityIds) {
+      allActivityIds.add(id);
+    }
+
+    for (const actId of allActivityIds) {
+      const outgoing = graph.getOutgoing(actId);
+      for (const edge of outgoing) {
+        if (edge.type !== EdgeType.MapsColumn) continue;
+        const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
+        const sinkColumn = (edge.metadata.sinkColumn as string | null) ?? null;
+        if (sourceColumn === attribute || sinkColumn === attribute) {
+          columnMappings.push({
+            activityId: actId,
+            sourceColumn,
+            sinkColumn,
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    entity,
+    attribute,
+    direction,
+    paths,
+    columnMappings,
+  };
+}
