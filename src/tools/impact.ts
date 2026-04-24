@@ -29,7 +29,7 @@ export function handleImpactAnalysis(
   graph: Graph,
   target: string,
   targetType: string,
-  direction: ImpactDirection = "downstream",
+  direction: ImpactDirection = "both",
 ): ImpactAnalysisResult {
   const nodeId = `${targetType}:${target}`;
   const node = graph.getNode(nodeId);

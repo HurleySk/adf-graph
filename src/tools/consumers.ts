@@ -48,16 +48,21 @@ export function handleFindConsumers(
     const fromNode = graph.getNode(edge.from);
     if (!fromNode) continue;
 
-    // Activities have IDs like "activity:PipelineName/ActivityName"
-    if (fromNode.type !== undefined && edge.from.startsWith("activity:")) {
-      const parts = fromNode.name.includes("/")
-        ? fromNode.name.split("/")
-        : edge.from.slice("activity:".length).split("/");
-      const pipelineName = parts[0];
-      const activityName = parts.slice(1).join("/") || fromNode.name;
+    if (fromNode.type === "activity") {
+      // Activity IDs are "activity:PipelineName/ActivityName"
+      const idSuffix = edge.from.slice("activity:".length);
+      const slashIdx = idSuffix.indexOf("/");
+      const pipelineName = slashIdx >= 0 ? idSuffix.substring(0, slashIdx) : "unknown";
+      const activityName = slashIdx >= 0 ? idSuffix.substring(slashIdx + 1) : fromNode.name;
       consumers.push({
         pipeline: pipelineName,
         activity: activityName,
+        usage: usageFromEdgeType(edge.type),
+      });
+    } else if (fromNode.type === "pipeline") {
+      consumers.push({
+        pipeline: fromNode.name,
+        activity: "(pipeline-level)",
         usage: usageFromEdgeType(edge.type),
       });
     }
