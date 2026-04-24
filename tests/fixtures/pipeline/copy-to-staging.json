@@ -1,0 +1,47 @@
+{
+  "name": "Copy_To_Staging",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy Legacy Data",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlServerSource",
+            "sqlReaderQuery": "SELECT org_id, org_name, org_type FROM dbo.LegacyOrg WHERE active = 1"
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert"
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "mappings": [
+              { "source": { "name": "org_id" }, "sink": { "name": "org_id" } },
+              { "source": { "name": "org_name" }, "sink": { "name": "org_name" } },
+              { "source": { "name": "org_type" }, "sink": { "name": "org_type_code" } }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_sql_source",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_sql_staging",
+            "type": "DatasetReference",
+            "parameters": {
+              "schema_name": "dbo",
+              "table_name": "Org_Staging"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": []
+  }
+}

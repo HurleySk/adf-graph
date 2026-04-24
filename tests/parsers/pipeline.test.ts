@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { parsePipelineFile, extractTablesFromSql } from "../../src/parsers/pipeline.js";
 
-const fixtureDir = join(import.meta.dirname, "../fixtures/pipelines");
+const fixtureDir = join(import.meta.dirname, "../fixtures/pipeline");
 
 function loadFixture(name: string): unknown {
   return JSON.parse(readFileSync(join(fixtureDir, name), "utf-8"));

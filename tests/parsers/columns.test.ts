@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { extractColumnMappings } from "../../src/parsers/columns.js";
 
-const fixtureDir = join(import.meta.dirname, "../fixtures/pipelines");
+const fixtureDir = join(import.meta.dirname, "../fixtures/pipeline");
 
 function loadActivity(file: string, activityName: string): Record<string, unknown> {
   const json = JSON.parse(readFileSync(join(fixtureDir, file), "utf-8")) as {

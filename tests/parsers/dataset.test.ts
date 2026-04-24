@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { parseDatasetFile } from "../../src/parsers/dataset.js";
 
-const fixtureDir = join(import.meta.dirname, "../fixtures/datasets");
+const fixtureDir = join(import.meta.dirname, "../fixtures/dataset");
 
 function loadFixture(name: string): unknown {
   return JSON.parse(readFileSync(join(fixtureDir, name), "utf-8"));
