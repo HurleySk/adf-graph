@@ -1,22 +1,22 @@
 export enum NodeType {
-  Pipeline = "Pipeline",
-  Activity = "Activity",
-  Dataset = "Dataset",
-  StoredProcedure = "StoredProcedure",
-  Table = "Table",
-  DataverseEntity = "DataverseEntity",
+  Pipeline = "pipeline",
+  Activity = "activity",
+  Dataset = "dataset",
+  StoredProcedure = "stored_procedure",
+  Table = "table",
+  DataverseEntity = "dataverse_entity",
 }
 
 export enum EdgeType {
-  Executes = "Executes",
-  Contains = "Contains",
-  DependsOn = "DependsOn",
-  ReadsFrom = "ReadsFrom",
-  WritesTo = "WritesTo",
-  CallsSp = "CallsSp",
-  UsesDataset = "UsesDataset",
-  UsesLinkedService = "UsesLinkedService",
-  MapsColumn = "MapsColumn",
+  Executes = "executes",
+  Contains = "contains",
+  DependsOn = "depends_on",
+  ReadsFrom = "reads_from",
+  WritesTo = "writes_to",
+  CallsSp = "calls_sp",
+  UsesDataset = "uses_dataset",
+  UsesLinkedService = "uses_linked_service",
+  MapsColumn = "maps_column",
 }
 
 export interface GraphNode {
@@ -35,7 +35,7 @@ export interface GraphEdge {
 
 export interface TraversalResult {
   node: GraphNode;
-  path: string[];
+  path: GraphEdge[];
   depth: number;
 }
 
@@ -129,55 +129,53 @@ export class Graph {
   private bfs(startId: string, direction: "downstream" | "upstream"): TraversalResult[] {
     const results: TraversalResult[] = [];
     const visited = new Set<string>([startId]);
-    // Queue holds [currentId, pathSoFar]
-    const queue: [string, string[]][] = [[startId, [startId]]];
+    const queue: Array<{ id: string; path: GraphEdge[]; depth: number }> = [
+      { id: startId, path: [], depth: 0 },
+    ];
 
     while (queue.length > 0) {
-      const [currentId, path] = queue.shift()!;
+      const { id, path, depth } = queue.shift()!;
       const edges =
         direction === "downstream"
-          ? this.getOutgoing(currentId)
-          : this.getIncoming(currentId);
+          ? this.getOutgoing(id)
+          : this.getIncoming(id);
 
       for (const edge of edges) {
-        const neighborId = direction === "downstream" ? edge.to : edge.from;
-        if (visited.has(neighborId)) continue;
-        visited.add(neighborId);
+        const nextId = direction === "downstream" ? edge.to : edge.from;
+        if (visited.has(nextId)) continue;
+        visited.add(nextId);
 
-        const neighborNode = this.nodes.get(neighborId);
-        if (!neighborNode) continue;
-
-        const newPath = [...path, neighborId];
-        results.push({ node: neighborNode, path: newPath, depth: newPath.length - 1 });
-        queue.push([neighborId, newPath]);
+        const nextPath = [...path, edge];
+        const node = this.nodes.get(nextId);
+        if (node) {
+          results.push({ node, path: nextPath, depth: depth + 1 });
+        }
+        queue.push({ id: nextId, path: nextPath, depth: depth + 1 });
       }
     }
 
     return results;
   }
 
-  findPaths(fromId: string, toId: string, maxDepth: number = 20): string[][] {
-    const results: string[][] = [];
-    const stack: [string, string[]][] = [[fromId, [fromId]]];
-
-    while (stack.length > 0) {
-      const [currentId, path] = stack.pop()!;
-
-      if (currentId === toId) {
-        results.push(path);
-        continue;
+  findPaths(fromId: string, toId: string, maxDepth = 20): GraphEdge[][] {
+    const results: GraphEdge[][] = [];
+    const dfs = (current: string, path: GraphEdge[], visited: Set<string>) => {
+      if (current === toId && path.length > 0) {
+        results.push([...path]);
+        return;
       }
-
-      if (path.length - 1 >= maxDepth) continue;
-
-      for (const edge of this.getOutgoing(currentId)) {
-        const nextId = edge.to;
-        // Avoid revisiting nodes already in the current path (cycle guard)
-        if (path.includes(nextId)) continue;
-        stack.push([nextId, [...path, nextId]]);
+      if (path.length >= maxDepth) return;
+      for (const edge of this.getOutgoing(current)) {
+        if (visited.has(edge.to)) continue;
+        visited.add(edge.to);
+        path.push(edge);
+        dfs(edge.to, path, visited);
+        path.pop();
+        visited.delete(edge.to);
       }
-    }
-
+    };
+    const visited = new Set<string>([fromId]);
+    dfs(fromId, [], visited);
     return results;
   }
 
