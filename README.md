@@ -14,9 +14,31 @@ ADF_ROOT=/path/to/work-repo node dist/server.js
 
 `ADF_ROOT` must point to a directory containing `pipeline/`, `dataset/`, and/or `linkedService/` subdirectories. The graph is built lazily on the first tool call and rebuilt automatically when files change.
 
+## Multi-environment Configuration
+
+To query multiple ADF roots (e.g. your work repo and a live dev factory export), create `adf-graph.json` in the repo root (next to `dist/`):
+
+```json
+{
+  "environments": {
+    "work-repo": {
+      "path": "C:/path/to/work-repo",
+      "default": true
+    },
+    "dev1": {
+      "path": "C:/path/to/adf-export/dev1"
+    }
+  }
+}
+```
+
+Each environment has its own lazily-built graph and staleness tracker. Use the optional `environment` parameter on any tool to target a specific environment. Omit it to use the default.
+
+You can also set `ADF_CONFIG=/absolute/path/to/adf-graph.json` to use a config file at an arbitrary location (takes priority over the sidecar file).
+
 ## MCP Configuration
 
-Add to your Claude Desktop / Claude Code `settings.json`:
+### Single environment (ADF_ROOT)
 
 ```json
 {
@@ -32,7 +54,25 @@ Add to your Claude Desktop / Claude Code `settings.json`:
 }
 ```
 
+### Multi-environment (config file)
+
+```json
+{
+  "mcpServers": {
+    "adf-graph": {
+      "command": "node",
+      "args": ["/path/to/adf-graph/dist/server.js"],
+      "env": {
+        "ADF_CONFIG": "/path/to/adf-graph.json"
+      }
+    }
+  }
+}
+```
+
 ## Tools
+
+All tools except `graph_list_environments` accept an optional `environment` parameter. Omit it to use the default environment.
 
 | Tool | Description |
 |---|---|
@@ -42,6 +82,7 @@ Add to your Claude Desktop / Claude Code `settings.json`:
 | `graph_impact_analysis` | All nodes affected upstream/downstream if an artifact changes |
 | `graph_data_lineage` | Data flow paths for a Dataverse entity or staging table; optional column filter |
 | `graph_find_paths` | All dependency paths between two named nodes |
+| `graph_list_environments` | List all configured environments with paths, stats, and staleness status |
 
 ### `graph_find_consumers` / `graph_impact_analysis` target types
 
@@ -57,11 +98,13 @@ Add to your Claude Desktop / Claude Code `settings.json`:
 
 ```
 src/
+  config.ts          # Config loader (ADF_CONFIG / adf-graph.json / ADF_ROOT)
   server.ts          # MCP server entry point
   graph/
     model.ts         # Graph, NodeType, EdgeType definitions
-    builder.ts       # Builds graph from ADF_ROOT
+    builder.ts       # Builds graph from a root path
     staleness.ts     # Mtime-based cache invalidation
+    manager.ts       # Multi-environment graph manager
   tools/
     stats.ts         # graph_stats handler
     consumers.ts     # graph_find_consumers handler
