@@ -126,4 +126,69 @@ describe("loadConfig", () => {
       expect(() => loadConfig()).toThrow(/no configuration found/);
     });
   });
+
+  describe("overlays in config", () => {
+    it("parses overlays array for an environment", () => {
+      const cfgPath = writeConfig("overlays.json", {
+        environments: {
+          main: {
+            path: "/some/path",
+            default: true,
+            overlays: ["/overlay/dir", "/overlay/file.json"],
+          },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+
+      const config = loadConfig();
+      expect(config.environments["main"].overlays).toEqual([
+        "/overlay/dir",
+        "/overlay/file.json",
+      ]);
+    });
+
+    it("defaults overlays to undefined when not provided", () => {
+      const cfgPath = writeConfig("no-overlays.json", {
+        environments: {
+          main: { path: "/some/path", default: true },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+
+      const config = loadConfig();
+      expect(config.environments["main"].overlays).toBeUndefined();
+    });
+
+    it("rejects non-array overlays value", () => {
+      const cfgPath = writeConfig("bad-overlays.json", {
+        environments: {
+          main: { path: "/some/path", overlays: "not-an-array" },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+      expect(() => loadConfig()).toThrow(/overlays.*must be an array/);
+    });
+
+    it("rejects non-string entries in overlays array", () => {
+      const cfgPath = writeConfig("bad-overlay-entry.json", {
+        environments: {
+          main: { path: "/some/path", overlays: [123] },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+      expect(() => loadConfig()).toThrow(/overlays.*must be non-empty strings/);
+    });
+  });
+
+  describe("+ in environment name", () => {
+    it("rejects environment names containing +", () => {
+      const cfgPath = writeConfig("plus-name.json", {
+        environments: {
+          "my+env": { path: "/some/path" },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+      expect(() => loadConfig()).toThrow(/cannot contain '\+'/);
+    });
+  });
 });

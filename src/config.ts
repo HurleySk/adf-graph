@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 export interface EnvironmentConfig {
   path: string;
   default?: boolean;
+  overlays?: string[];
 }
 
 export interface AdfGraphConfig {
@@ -87,12 +88,34 @@ function validateConfig(raw: unknown, source: string): AdfGraphConfig {
       throw new Error(`adf-graph: environment '${name}' in '${source}' must be an object`);
     }
     const envObj = value as Record<string, unknown>;
+    if (name.includes("+")) {
+      throw new Error(
+        `adf-graph: environment name '${name}' in '${source}' cannot contain '+' (reserved for merged views)`,
+      );
+    }
     if (typeof envObj.path !== "string" || !envObj.path) {
       throw new Error(`adf-graph: environment '${name}' in '${source}' must have a "path" string`);
+    }
+    let overlays: string[] | undefined;
+    if (envObj.overlays !== undefined) {
+      if (!Array.isArray(envObj.overlays)) {
+        throw new Error(
+          `adf-graph: environment '${name}' in '${source}': overlays must be an array of strings`,
+        );
+      }
+      for (const entry of envObj.overlays) {
+        if (typeof entry !== "string" || !entry) {
+          throw new Error(
+            `adf-graph: environment '${name}' in '${source}': overlays entries must be non-empty strings`,
+          );
+        }
+      }
+      overlays = envObj.overlays as string[];
     }
     environments[name] = {
       path: envObj.path,
       ...(envObj.default === true ? { default: true } : {}),
+      ...(overlays ? { overlays } : {}),
     };
   }
   if (Object.keys(environments).length === 0) {
