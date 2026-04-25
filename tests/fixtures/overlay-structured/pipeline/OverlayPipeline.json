@@ -1,0 +1,15 @@
+{
+  "name": "OverlayPipeline",
+  "properties": {
+    "activities": [
+      {
+        "name": "Overlay Activity",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {},
+        "inputs": [],
+        "outputs": []
+      }
+    ]
+  }
+}

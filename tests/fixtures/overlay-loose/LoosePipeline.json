@@ -1,0 +1,15 @@
+{
+  "name": "LoosePipeline",
+  "properties": {
+    "activities": [
+      {
+        "name": "Loose Activity",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {},
+        "inputs": [],
+        "outputs": []
+      }
+    ]
+  }
+}

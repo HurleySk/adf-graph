@@ -1,0 +1,14 @@
+{
+  "name": "LooseDataset",
+  "properties": {
+    "type": "AzureSqlTable",
+    "linkedServiceName": {
+      "referenceName": "ls_test",
+      "type": "LinkedServiceReference"
+    },
+    "typeProperties": {
+      "schema": "dbo",
+      "table": "TestTable"
+    }
+  }
+}
