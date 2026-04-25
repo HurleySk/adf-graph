@@ -1,7 +1,25 @@
 {
   "name": "adf-graph",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server that builds a queryable dependency graph from ADF pipeline artifacts",
+  "license": "MIT",
+  "author": "HurleySk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HurleySk/adf-graph.git"
+  },
+  "homepage": "https://github.com/HurleySk/adf-graph#readme",
+  "keywords": [
+    "mcp",
+    "azure-data-factory",
+    "adf",
+    "dependency-graph",
+    "data-lineage",
+    "impact-analysis"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "type": "module",
   "bin": {
     "adf-graph": "dist/server.js"

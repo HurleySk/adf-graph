@@ -70,6 +70,21 @@ Environments can have an optional `overlays` array to layer local/in-progress fi
 - Runtime environments can be registered via `graph_add_environment`.
 - Runtime additions are ephemeral (lost on server restart).
 
+## Publishing
+
+### npm publish workflow
+
+1. Update `version` in both `package.json` and `server.json` (they must match)
+2. `npm run build`
+3. `npm test`
+4. `npm publish --access public`
+
+Authenticate via `npm login` or `NPM_TOKEN` env var. Never store tokens in the repo (`.npmrc` is in `.gitignore`).
+
+### MCP registry
+
+The `server.json` file follows the [MCP server manifest schema](https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json) and is included in the published npm package. To list or update the package in the MCP server registry, submit a PR to [github.com/modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers) referencing the npm package.
+
 ### Priority
 
 1. `ADF_CONFIG` env var (explicit path to config file)

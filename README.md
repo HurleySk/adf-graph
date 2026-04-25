@@ -2,7 +2,7 @@
 
 MCP server that builds a queryable dependency graph from Azure Data Factory pipeline artifacts.
 
-Parses ADF pipelines, datasets, linked services, and SQL stored procedures into a graph of nodes and edges. Exposes six MCP tools for dependency analysis, impact assessment, and data lineage tracing.
+Parses ADF pipelines, datasets, linked services, and SQL stored procedures into a graph of nodes and edges. Exposes MCP tools for dependency analysis, impact assessment, data lineage tracing, and environment/overlay management.
 
 ## Quick Start
 
@@ -35,6 +35,28 @@ To query multiple ADF roots (e.g. your work repo and a live dev factory export),
 Each environment has its own lazily-built graph and staleness tracker. Use the optional `environment` parameter on any tool to target a specific environment. Omit it to use the default.
 
 You can also set `ADF_CONFIG=/absolute/path/to/adf-graph.json` to use a config file at an arbitrary location (takes priority over the sidecar file).
+
+### Overlays
+
+Environments can have an optional `overlays` array to layer local or in-progress files on top of the base graph:
+
+```json
+{
+  "environments": {
+    "work-repo": {
+      "path": "C:/repos/adf-main",
+      "default": true,
+      "overlays": ["C:/my-wip/", "C:/one-off/NewPipeline.json"]
+    }
+  }
+}
+```
+
+- Overlay directories with ADF structure (`pipeline/`, `dataset/`) are parsed normally.
+- Loose files are auto-detected by inspecting JSON content.
+- The base graph stays clean; a merged view appears as `{name}+overlays`.
+- Runtime overlays can be added/removed via MCP tools (`graph_add_overlay`, `graph_remove_overlay`).
+- Runtime additions are ephemeral (lost on server restart).
 
 ## MCP Configuration
 
@@ -83,6 +105,11 @@ All tools except `graph_list_environments` accept an optional `environment` para
 | `graph_data_lineage` | Data flow paths for a Dataverse entity or staging table; optional column filter |
 | `graph_find_paths` | All dependency paths between two named nodes |
 | `graph_list_environments` | List all configured environments with paths, stats, and staleness status |
+| `graph_add_overlay` | Add an overlay path to an environment (runtime, ephemeral) |
+| `graph_remove_overlay` | Remove a runtime overlay from an environment |
+| `graph_list_overlays` | List all overlays (config + runtime) for an environment |
+| `graph_add_environment` | Register a new ephemeral environment pointing to an ADF root |
+| `graph_remove_environment` | Remove a runtime environment |
 
 ### `graph_find_consumers` / `graph_impact_analysis` target types
 
@@ -105,6 +132,7 @@ src/
     builder.ts       # Builds graph from a root path
     staleness.ts     # Mtime-based cache invalidation
     manager.ts       # Multi-environment graph manager
+    overlay.ts       # Overlay scanning and graph merge
   tools/
     stats.ts         # graph_stats handler
     consumers.ts     # graph_find_consumers handler
