@@ -35,6 +35,23 @@ describe("handleDiffPipeline", () => {
     expect(result.summary.added).toBe(1);
   });
 
+  it("detects modified activities when SQL differs", () => {
+    const { graph: graphA } = buildGraph(fixtureRoot);
+    const { graph: graphB } = buildGraph(fixtureRoot);
+    // Mutate an activity in graphB to simulate a different environment
+    const actNode = graphB.getNode("activity:Copy_To_Dataverse/Upsert Organizations");
+    expect(actNode).toBeDefined();
+    actNode!.metadata.sqlQuery = "SELECT * FROM dbo.Org_Staging WHERE env = 'prod'";
+    const result = handleDiffPipeline(graphA, graphB, "Copy_To_Dataverse", "envA", "envB");
+    expect(result.error).toBeUndefined();
+    const modified = result.activityDiffs.find((d) => d.status === "modified");
+    expect(modified).toBeDefined();
+    expect(modified!.activity).toBe("Upsert Organizations");
+    expect(modified!.changes).toBeDefined();
+    expect(modified!.changes!.some((c) => c.includes("sqlQuery"))).toBe(true);
+    expect(result.summary.modified).toBe(1);
+  });
+
   it("detects parameter changes between environments", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);

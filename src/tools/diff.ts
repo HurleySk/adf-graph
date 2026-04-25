@@ -24,9 +24,9 @@ export interface PipelineDiffResult {
 
 function arraysEqual(a: unknown[], b: unknown[]): boolean {
   if (a.length !== b.length) return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
-  return sortedA.every((v, i) => JSON.stringify(v) === JSON.stringify(sortedB[i]));
+  const sortedA = [...a].map((v) => JSON.stringify(v)).sort();
+  const sortedB = [...b].map((v) => JSON.stringify(v)).sort();
+  return sortedA.every((v, i) => v === sortedB[i]);
 }
 
 function diffActivity(a: ActivityInfo, b: ActivityInfo): string[] {
@@ -40,11 +40,15 @@ function diffActivity(a: ActivityInfo, b: ActivityInfo): string[] {
     changes.push(`dependsOn changed`);
   }
 
-  if (a.sources && b.sources && !arraysEqual(a.sources, b.sources)) {
+  const srcA = a.sources ?? [];
+  const srcB = b.sources ?? [];
+  if (!arraysEqual(srcA, srcB)) {
     changes.push(`sources changed`);
   }
 
-  if (a.sinks && b.sinks && !arraysEqual(a.sinks, b.sinks)) {
+  const snkA = a.sinks ?? [];
+  const snkB = b.sinks ?? [];
+  if (!arraysEqual(snkA, snkB)) {
     changes.push(`sinks changed`);
   }
 

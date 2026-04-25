@@ -23,7 +23,7 @@ const manager = new GraphManager(config);
 
 const server = new McpServer({
   name: "adf-graph",
-  version: "0.1.0",
+  version: "0.4.0",
 });
 
 /** Shared optional environment parameter for all graph tools. */
@@ -161,7 +161,7 @@ server.tool(
   "graph_search_queries",
   "Search across all activity SQL queries and FetchXML for a text pattern (case-insensitive). Returns matching activities with the full query text.",
   {
-    query: z.string().describe("Text to search for (case-insensitive substring match)"),
+    query: z.string().min(1).describe("Text to search for (case-insensitive substring match)"),
     environment: environmentParam,
   },
   async ({ query, environment }) => {
