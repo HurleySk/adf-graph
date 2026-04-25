@@ -64,6 +64,30 @@ describe("handleDiffPipeline", () => {
     expect(modified!.changes!.some((c) => c.includes("storedProcedureName"))).toBe(true);
   });
 
+  it("detects modified activities when storedProcedureParameters differs", () => {
+    const { graph: graphA } = buildGraph(fixtureRoot);
+    const { graph: graphB } = buildGraph(fixtureRoot);
+    const actNode = graphB.getNode("activity:SP_Transform/Run p_Transform_Org");
+    expect(actNode).toBeDefined();
+    actNode!.metadata.storedProcedureParameters = { batch_id: { type: "Int32", value: "999" } };
+    const result = handleDiffPipeline(graphA, graphB, "SP_Transform", "envA", "envB");
+    const modified = result.activityDiffs.find((d) => d.status === "modified");
+    expect(modified).toBeDefined();
+    expect(modified!.changes!.some((c) => c.includes("storedProcedureParameters"))).toBe(true);
+  });
+
+  it("detects modified activities when pipelineParameters differs", () => {
+    const { graph: graphA } = buildGraph(fixtureRoot);
+    const { graph: graphB } = buildGraph(fixtureRoot);
+    const actNode = graphB.getNode("activity:Test_Orchestrator/Run Copy To Dataverse");
+    expect(actNode).toBeDefined();
+    actNode!.metadata.pipelineParameters = { dataverse_query: "<fetch><entity name='changed'/></fetch>" };
+    const result = handleDiffPipeline(graphA, graphB, "Test_Orchestrator", "envA", "envB");
+    const modified = result.activityDiffs.find((d) => d.status === "modified");
+    expect(modified).toBeDefined();
+    expect(modified!.changes!.some((c) => c.includes("pipelineParameters"))).toBe(true);
+  });
+
   it("detects parameter changes between environments", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);

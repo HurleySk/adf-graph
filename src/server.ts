@@ -159,7 +159,7 @@ server.tool(
 // Tool 7: graph_search_queries
 server.tool(
   "graph_search_queries",
-  "Search across all activity SQL queries and FetchXML for a text pattern (case-insensitive). Returns matching activities with the full query text.",
+  "Search across activity SQL, FetchXML, stored procedure names/parameters, and ExecutePipeline parameter values for a text pattern (case-insensitive).",
   {
     query: z.string().min(1).describe("Text to search for (case-insensitive substring match)"),
     environment: environmentParam,

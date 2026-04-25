@@ -186,7 +186,7 @@ export class Graph {
     return Array.from(this.nodes.values());
   }
 
-  // Shallow metadata copy — sufficient for current scalar-valued metadata.
+  // Shallow metadata copy — inner objects (e.g. storedProcedureParameters) are set once at parse time and never mutated.
   clone(): Graph {
     const copy = new Graph();
     for (const node of this.nodes.values()) {
