@@ -10,6 +10,11 @@ import { handleDescribePipeline } from "./tools/describe.js";
 import { handleImpactAnalysis } from "./tools/impact.js";
 import { handleDataLineage } from "./tools/lineage.js";
 import { handleFindPaths } from "./tools/paths.js";
+import { handleAddOverlay } from "./tools/addOverlay.js";
+import { handleRemoveOverlay } from "./tools/removeOverlay.js";
+import { handleListOverlays } from "./tools/listOverlays.js";
+import { handleAddEnvironment } from "./tools/addEnvironment.js";
+import { handleRemoveEnvironment } from "./tools/removeEnvironment.js";
 
 const config = loadConfig();
 const manager = new GraphManager(config);
@@ -150,6 +155,78 @@ server.tool(
   {},
   async () => {
     const result = manager.listEnvironments();
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 8: graph_add_overlay
+server.tool(
+  "graph_add_overlay",
+  "Add an overlay path (directory or file) to an environment. The overlay's artifacts are merged on top of the base graph in a separate merged view. Runtime overlays are ephemeral (lost on restart).",
+  {
+    environment: z.string().describe("Base environment name to overlay onto"),
+    path: z.string().describe("Path to overlay directory or file"),
+  },
+  async ({ environment, path }) => {
+    const result = handleAddOverlay(manager, environment, path);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 9: graph_remove_overlay
+server.tool(
+  "graph_remove_overlay",
+  "Remove a runtime overlay from an environment. Config-based overlays cannot be removed via this tool.",
+  {
+    environment: z.string().describe("Environment name"),
+    path: z.string().describe("Overlay path to remove"),
+  },
+  async ({ environment, path }) => {
+    const result = handleRemoveOverlay(manager, environment, path);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 10: graph_list_overlays
+server.tool(
+  "graph_list_overlays",
+  "List all overlays (config-based and runtime) for an environment.",
+  {
+    environment: z.string().describe("Environment name"),
+  },
+  async ({ environment }) => {
+    const result = handleListOverlays(manager, environment);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 11: graph_add_environment
+server.tool(
+  "graph_add_environment",
+  "Register a new ephemeral environment pointing to an ADF artifact directory. Lost on server restart. Cannot collide with config-based environment names.",
+  {
+    name: z.string().describe("Environment name (cannot contain '+')"),
+    path: z.string().describe("Path to ADF artifact root directory"),
+    overlays: z
+      .array(z.string())
+      .optional()
+      .describe("Optional overlay paths to apply to this environment"),
+  },
+  async ({ name, path, overlays }) => {
+    const result = handleAddEnvironment(manager, name, path, overlays);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 12: graph_remove_environment
+server.tool(
+  "graph_remove_environment",
+  "Remove a runtime environment. Config-based environments cannot be removed via this tool.",
+  {
+    name: z.string().describe("Environment name to remove"),
+  },
+  async ({ name }) => {
+    const result = handleRemoveEnvironment(manager, name);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );
