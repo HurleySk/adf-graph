@@ -121,4 +121,30 @@ describe("Graph", () => {
     const downstream = g.traverseDownstream("pipeline:A");
     expect(downstream).toHaveLength(1); // just B, stops at cycle
   });
+
+  it("clones a graph with independent node/edge copies", () => {
+    const g = new Graph();
+    g.addNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A", metadata: { x: 1 } });
+    g.addNode({ id: "pipeline:B", type: NodeType.Pipeline, name: "B", metadata: {} });
+    g.addEdge({ from: "pipeline:A", to: "pipeline:B", type: EdgeType.Executes, metadata: {} });
+
+    const cloned = g.clone();
+
+    expect(cloned.getNode("pipeline:A")).toEqual(g.getNode("pipeline:A"));
+    expect(cloned.getNode("pipeline:B")).toEqual(g.getNode("pipeline:B"));
+    expect(cloned.getOutgoing("pipeline:A")).toEqual(g.getOutgoing("pipeline:A"));
+    expect(cloned.getIncoming("pipeline:B")).toEqual(g.getIncoming("pipeline:B"));
+    expect(cloned.stats()).toEqual(g.stats());
+
+    cloned.addNode({ id: "pipeline:C", type: NodeType.Pipeline, name: "C", metadata: {} });
+    expect(cloned.stats().nodeCount).toBe(3);
+    expect(g.stats().nodeCount).toBe(2);
+  });
+
+  it("clones an empty graph", () => {
+    const g = new Graph();
+    const cloned = g.clone();
+    expect(cloned.stats().nodeCount).toBe(0);
+    expect(cloned.stats().edgeCount).toBe(0);
+  });
 });

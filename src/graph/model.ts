@@ -179,6 +179,19 @@ export class Graph {
     return results;
   }
 
+  clone(): Graph {
+    const copy = new Graph();
+    for (const node of this.nodes.values()) {
+      copy.addNode({ ...node, metadata: { ...node.metadata } });
+    }
+    for (const edges of this.outgoing.values()) {
+      for (const edge of edges) {
+        copy.addEdge({ ...edge, metadata: { ...edge.metadata } });
+      }
+    }
+    return copy;
+  }
+
   getAllReferencedIds(): Set<string> {
     const ids = new Set<string>();
     for (const edges of this.outgoing.values()) {
