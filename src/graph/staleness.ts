@@ -41,29 +41,33 @@ function maxMtimeMs(dir: string): number {
  * Mtime-based staleness checker for the graph builder.
  *
  * Watches `pipeline/`, `dataset/`, `linkedService/`, and `SQL DB/` under
- * the given root. Reports stale when any file in those directories has a
- * mtime newer than the last recorded build time.
+ * each registered root path. Reports stale when any file in those directories
+ * has a mtime newer than the last recorded build time.
+ *
+ * Accepts a single string or an array of strings for multi-root support.
  */
 export class StalenessChecker {
-  private rootPath: string;
+  private rootPaths: string[];
   /** Wall-clock timestamp (ms since epoch) when markBuilt() was last called, or null. */
   private builtAt: number | null = null;
   /** Max file mtime (ms) observed at the time of the last markBuilt() call. */
   private builtMaxMtime: number | null = null;
 
-  constructor(rootPath: string) {
-    this.rootPath = rootPath;
+  constructor(rootPath: string | string[]) {
+    this.rootPaths = Array.isArray(rootPath) ? [...rootPath] : [rootPath];
   }
 
   /**
    * Returns true if the graph needs to be rebuilt:
    * - Never built
-   * - Root path does not exist
+   * - No root paths registered
+   * - None of the root paths exist
    * - Any watched file has mtime > the mtime snapshot at last build
    */
   isStale(): boolean {
     if (this.builtAt === null || this.builtMaxMtime === null) return true;
-    if (!existsSync(this.rootPath)) return true;
+    if (this.rootPaths.length === 0) return true;
+    if (!this.rootPaths.some((p) => existsSync(p))) return true;
 
     const currentMax = this.currentMaxMtime();
     return currentMax > this.builtMaxMtime;
@@ -87,12 +91,42 @@ export class StalenessChecker {
     return new Date(this.builtAt);
   }
 
+  /**
+   * Adds a new root path to watch. Forces staleness so the graph is rebuilt
+   * on the next access.
+   */
+  addPath(path: string): void {
+    if (!this.rootPaths.includes(path)) {
+      this.rootPaths.push(path);
+      this.invalidate();
+    }
+  }
+
+  /**
+   * Removes a root path from the watch list. Forces staleness so the graph
+   * is rebuilt on the next access.
+   */
+  removePath(path: string): void {
+    const idx = this.rootPaths.indexOf(path);
+    if (idx !== -1) {
+      this.rootPaths.splice(idx, 1);
+      this.invalidate();
+    }
+  }
+
+  private invalidate(): void {
+    this.builtAt = null;
+    this.builtMaxMtime = null;
+  }
+
   private currentMaxMtime(): number {
     let max = 0;
-    for (const dir of WATCHED_DIRS) {
-      const fullDir = join(this.rootPath, dir);
-      const m = maxMtimeMs(fullDir);
-      if (m > max) max = m;
+    for (const rootPath of this.rootPaths) {
+      for (const dir of WATCHED_DIRS) {
+        const fullDir = join(rootPath, dir);
+        const m = maxMtimeMs(fullDir);
+        if (m > max) max = m;
+      }
     }
     return max;
   }

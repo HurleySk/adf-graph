@@ -62,4 +62,68 @@ describe("StalenessChecker", () => {
     // Should be very recent
     expect(Date.now() - t!.getTime()).toBeLessThan(2000);
   });
+
+  describe("multi-path support", () => {
+    it("accepts an array of root paths", () => {
+      const dir1 = join(tmpDir, "root1");
+      const dir2 = join(tmpDir, "root2");
+      mkdirSync(join(dir1, "pipeline"), { recursive: true });
+      mkdirSync(join(dir2, "pipeline"), { recursive: true });
+
+      const checker = new StalenessChecker([dir1, dir2]);
+      checker.markBuilt();
+      expect(checker.isStale()).toBe(false);
+    });
+
+    it("detects staleness from any watched path", async () => {
+      const dir1 = join(tmpDir, "root1");
+      const dir2 = join(tmpDir, "root2");
+      mkdirSync(join(dir1, "pipeline"), { recursive: true });
+      mkdirSync(join(dir2, "pipeline"), { recursive: true });
+      writeFileSync(join(dir1, "pipeline", "a.json"), "{}");
+
+      const checker = new StalenessChecker([dir1, dir2]);
+      checker.markBuilt();
+      expect(checker.isStale()).toBe(false);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      writeFileSync(join(dir2, "pipeline", "b.json"), "{}");
+      expect(checker.isStale()).toBe(true);
+    });
+
+    it("single string constructor still works (backward compat)", () => {
+      const checker = new StalenessChecker(tmpDir);
+      checker.markBuilt();
+      expect(checker.isStale()).toBe(false);
+    });
+
+    it("addPath registers a new path and forces staleness", () => {
+      const dir1 = join(tmpDir, "root1");
+      mkdirSync(join(dir1, "pipeline"), { recursive: true });
+
+      const checker = new StalenessChecker(dir1);
+      checker.markBuilt();
+      expect(checker.isStale()).toBe(false);
+
+      const dir2 = join(tmpDir, "root2");
+      mkdirSync(join(dir2, "pipeline"), { recursive: true });
+      checker.addPath(dir2);
+      expect(checker.isStale()).toBe(true);
+    });
+
+    it("removePath unregisters a path and forces staleness", () => {
+      const dir1 = join(tmpDir, "root1");
+      const dir2 = join(tmpDir, "root2");
+      mkdirSync(join(dir1, "pipeline"), { recursive: true });
+      mkdirSync(join(dir2, "pipeline"), { recursive: true });
+
+      const checker = new StalenessChecker([dir1, dir2]);
+      checker.markBuilt();
+      expect(checker.isStale()).toBe(false);
+
+      checker.removePath(dir2);
+      expect(checker.isStale()).toBe(true);
+    });
+  });
 });
