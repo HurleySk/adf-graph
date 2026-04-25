@@ -9,6 +9,8 @@ export interface ActivityInfo {
   sources?: string[];
   sinks?: string[];
   columnMappings?: Array<{ sourceColumn: string | null; sinkColumn: string | null }>;
+  sqlQuery?: string;
+  fetchXmlQuery?: string;
 }
 
 export interface PipelineSummary {
@@ -136,6 +138,12 @@ export function handleDescribePipeline(
       activityInfo.sources = sources;
       activityInfo.sinks = sinks;
       activityInfo.columnMappings = colMappings;
+      if (activityNode.metadata.sqlQuery) {
+        activityInfo.sqlQuery = activityNode.metadata.sqlQuery as string;
+      }
+      if (activityNode.metadata.fetchXmlQuery) {
+        activityInfo.fetchXmlQuery = activityNode.metadata.fetchXmlQuery as string;
+      }
     }
 
     activities.push(activityInfo);

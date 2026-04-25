@@ -36,15 +36,26 @@ describe("handleDescribePipeline", () => {
     expect(result.activities).toBeDefined();
     const upsert = result.activities!.find((a) => a.name === "Upsert Organizations");
     expect(upsert).toBeDefined();
-    // Has column mappings (org_id → alm_orgid, etc.)
+    // All 3 column mappings returned (not just the first)
     expect(upsert!.columnMappings).toBeDefined();
-    expect(upsert!.columnMappings!.length).toBeGreaterThan(0);
-    const firstMap = upsert!.columnMappings![0];
-    expect(firstMap.sourceColumn).toBeDefined();
-    expect(firstMap.sinkColumn).toBeDefined();
+    expect(upsert!.columnMappings!.length).toBe(3);
+    const sinkCols = upsert!.columnMappings!.map((m) => m.sinkColumn);
+    expect(sinkCols).toContain("alm_orgid");
+    expect(sinkCols).toContain("alm_name");
+    expect(sinkCols).toContain("alm_orgtypecode");
     // Has sinks (dataverse entity)
     expect(upsert!.sinks).toBeDefined();
     expect(upsert!.sinks!.some((s) => s.includes("alm_organization"))).toBe(true);
+  });
+
+  it("full depth: exposes sqlQuery on Copy activities", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Copy_To_Dataverse", "full");
+    const upsert = result.activities!.find((a) => a.name === "Upsert Organizations");
+    expect(upsert).toBeDefined();
+    expect(upsert!.sqlQuery).toBeDefined();
+    expect(upsert!.sqlQuery).toContain("SELECT org_id");
+    expect(upsert!.sqlQuery).toContain("dbo.Org_Staging");
   });
 
   it("returns error for unknown pipeline", () => {

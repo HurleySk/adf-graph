@@ -17,7 +17,7 @@ MCP server that builds a queryable dependency graph from ADF pipeline artifacts.
 - `src/graph/overlay.ts` — Artifact type detection, overlay scanning (structured + loose), graph merge
 - `src/graph/manager.ts` — Multi-environment graph manager (lazy build, per-env staleness, overlay merge views)
 - `src/parsers/` — One parser per artifact type (pipeline, dataset, sql, columns)
-- `src/tools/` — One file per MCP tool
+- `src/tools/` — One file per MCP tool (describe, lineage, search, diff, impact, consumers, paths, stats, overlay/env management)
 - `src/server.ts` — MCP server entry point, tool registration
 
 ## Configuration

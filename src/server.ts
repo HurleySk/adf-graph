@@ -10,6 +10,8 @@ import { handleDescribePipeline } from "./tools/describe.js";
 import { handleImpactAnalysis } from "./tools/impact.js";
 import { handleDataLineage } from "./tools/lineage.js";
 import { handleFindPaths } from "./tools/paths.js";
+import { handleSearchQueries } from "./tools/search.js";
+import { handleDiffPipeline } from "./tools/diff.js";
 import { handleAddOverlay } from "./tools/addOverlay.js";
 import { handleRemoveOverlay } from "./tools/removeOverlay.js";
 import { handleListOverlays } from "./tools/listOverlays.js";
@@ -121,11 +123,17 @@ server.tool(
     direction: z
       .enum(["upstream", "downstream"])
       .describe("'upstream' = what feeds this node; 'downstream' = what this node feeds"),
+    maxDepth: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("Maximum traversal depth (hops). Omit for unlimited."),
     environment: environmentParam,
   },
-  async ({ entity, attribute, direction, environment }) => {
+  async ({ entity, attribute, direction, maxDepth, environment }) => {
     const build = manager.ensureGraph(environment);
-    const result = handleDataLineage(build.graph, entity, attribute, direction);
+    const result = handleDataLineage(build.graph, entity, attribute, direction, maxDepth);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );
@@ -148,7 +156,39 @@ server.tool(
   },
 );
 
-// Tool 7: graph_list_environments
+// Tool 7: graph_search_queries
+server.tool(
+  "graph_search_queries",
+  "Search across all activity SQL queries and FetchXML for a text pattern (case-insensitive). Returns matching activities with the full query text.",
+  {
+    query: z.string().describe("Text to search for (case-insensitive substring match)"),
+    environment: environmentParam,
+  },
+  async ({ query, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const result = handleSearchQueries(build.graph, query);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 8: graph_diff_pipeline
+server.tool(
+  "graph_diff_pipeline",
+  "Compare a pipeline's structure across two environments. Shows added/removed/modified activities, SQL changes, and column mapping differences.",
+  {
+    pipeline: z.string().describe("Pipeline name to compare"),
+    envA: z.string().describe("First environment name"),
+    envB: z.string().describe("Second environment name"),
+  },
+  async ({ pipeline, envA, envB }) => {
+    const buildA = manager.ensureGraph(envA);
+    const buildB = manager.ensureGraph(envB);
+    const result = handleDiffPipeline(buildA.graph, buildB.graph, pipeline, envA, envB);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 9: graph_list_environments
 server.tool(
   "graph_list_environments",
   "List all configured environments with their paths, default status, and graph statistics (node/edge counts, last build time, staleness).",

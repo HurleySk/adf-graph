@@ -37,6 +37,15 @@ describe("handleDataLineage", () => {
     expect(mapping.sourceColumn).toBe("org_name");
   });
 
+  it("limits traversal depth with maxDepth", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const full = handleDataLineage(graph, "alm_organization", undefined, "upstream");
+    const limited = handleDataLineage(graph, "alm_organization", undefined, "upstream", 1);
+    expect(limited.paths.length).toBeLessThanOrEqual(full.paths.length);
+    expect(limited.truncated).toBe(true);
+    expect(full.truncated).toBeUndefined();
+  });
+
   it("returns empty paths for an unknown entity", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDataLineage(graph, "nonexistent_entity", undefined, "upstream");

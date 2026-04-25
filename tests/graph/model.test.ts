@@ -111,6 +111,35 @@ describe("Graph", () => {
     expect(paths[0][1].to).toBe("pipeline:C");
   });
 
+  it("traverseDownstream respects maxDepth", () => {
+    const g = new Graph();
+    g.addNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A", metadata: {} });
+    g.addNode({ id: "pipeline:B", type: NodeType.Pipeline, name: "B", metadata: {} });
+    g.addNode({ id: "pipeline:C", type: NodeType.Pipeline, name: "C", metadata: {} });
+    g.addEdge({ from: "pipeline:A", to: "pipeline:B", type: EdgeType.Executes, metadata: {} });
+    g.addEdge({ from: "pipeline:B", to: "pipeline:C", type: EdgeType.Executes, metadata: {} });
+
+    const limited = g.traverseDownstream("pipeline:A", 1);
+    expect(limited).toHaveLength(1);
+    expect(limited[0].node.id).toBe("pipeline:B");
+
+    const unlimited = g.traverseDownstream("pipeline:A");
+    expect(unlimited).toHaveLength(2);
+  });
+
+  it("traverseUpstream respects maxDepth", () => {
+    const g = new Graph();
+    g.addNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A", metadata: {} });
+    g.addNode({ id: "pipeline:B", type: NodeType.Pipeline, name: "B", metadata: {} });
+    g.addNode({ id: "pipeline:C", type: NodeType.Pipeline, name: "C", metadata: {} });
+    g.addEdge({ from: "pipeline:A", to: "pipeline:B", type: EdgeType.Executes, metadata: {} });
+    g.addEdge({ from: "pipeline:B", to: "pipeline:C", type: EdgeType.Executes, metadata: {} });
+
+    const limited = g.traverseUpstream("pipeline:C", 1);
+    expect(limited).toHaveLength(1);
+    expect(limited[0].node.id).toBe("pipeline:B");
+  });
+
   it("handles cycles without infinite loop", () => {
     const g = new Graph();
     g.addNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A", metadata: {} });

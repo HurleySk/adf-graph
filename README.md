@@ -100,10 +100,12 @@ All tools except `graph_list_environments` accept an optional `environment` para
 |---|---|
 | `graph_stats` | Node/edge counts by type, build time, staleness flag |
 | `graph_find_consumers` | All pipeline activities that read/write/call a given artifact |
-| `graph_describe_pipeline` | Pipeline summary, activity list, or full detail with column mappings |
+| `graph_describe_pipeline` | Pipeline summary, activity list, or full detail with SQL queries and column mappings |
 | `graph_impact_analysis` | All nodes affected upstream/downstream if an artifact changes |
-| `graph_data_lineage` | Data flow paths for a Dataverse entity or staging table; optional column filter |
+| `graph_data_lineage` | Data flow paths for a Dataverse entity or staging table; optional column filter and depth limit |
 | `graph_find_paths` | All dependency paths between two named nodes |
+| `graph_search_queries` | Search across all activity SQL and FetchXML for a text pattern |
+| `graph_diff_pipeline` | Compare a pipeline's structure across two environments |
 | `graph_list_environments` | List all configured environments with paths, stats, and staleness status |
 | `graph_add_overlay` | Add an overlay path to an environment (runtime, ephemeral) |
 | `graph_remove_overlay` | Remove a runtime overlay from an environment |
@@ -119,7 +121,19 @@ All tools except `graph_list_environments` accept an optional `environment` para
 
 - `summary` — name, parameters, child pipelines, root orchestrators
 - `activities` — adds activity list with dependencies, sources, and sinks
-- `full` — adds column-level mapping details
+- `full` — adds SQL queries, FetchXML, and column-level mapping details
+
+### `graph_data_lineage` depth limiting
+
+Use the optional `maxDepth` parameter to limit traversal depth (number of hops). Useful for large graphs where unlimited traversal produces oversized results.
+
+### `graph_search_queries`
+
+Searches all activity `sqlReaderQuery` and FetchXML fields for a case-insensitive substring match. Returns matching activities with the full query text.
+
+### `graph_diff_pipeline`
+
+Compares a pipeline's structure across two named environments. Reports added, removed, and modified activities with details on what changed (SQL, column mappings, sources, sinks).
 
 ## Directory Structure
 
@@ -140,6 +154,8 @@ src/
     impact.ts        # graph_impact_analysis handler
     lineage.ts       # graph_data_lineage handler
     paths.ts         # graph_find_paths handler
+    search.ts        # graph_search_queries handler
+    diff.ts          # graph_diff_pipeline handler
   parsers/
     pipeline.ts      # ADF pipeline JSON parser
     dataset.ts       # ADF dataset JSON parser

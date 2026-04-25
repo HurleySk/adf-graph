@@ -167,6 +167,14 @@ export function parsePipelineFile(json: unknown): ParseResult {
             metadata: {},
           });
         }
+        const actNode = nodes.find(n => n.id === activityId)!;
+        actNode.metadata.sqlQuery = sqlText;
+      }
+
+      const fetchXml = source?.query;
+      if (typeof fetchXml === "string" && fetchXml.trim().startsWith("<")) {
+        const actNode = nodes.find(n => n.id === activityId)!;
+        actNode.metadata.fetchXmlQuery = fetchXml;
       }
     }
 

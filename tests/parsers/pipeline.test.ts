@@ -74,6 +74,15 @@ describe("parsePipelineFile", () => {
     expect(readsFrom.map((e) => e.to)).toContain("table:dbo.Org_Staging");
   });
 
+  it("stores sqlReaderQuery in activity node metadata", () => {
+    const result = parsePipelineFile(loadFixture("copy-to-dataverse.json"));
+    const activity = result.nodes.find((n) => n.id === "activity:Copy_To_Dataverse/Upsert Organizations");
+    expect(activity).toBeDefined();
+    expect(activity!.metadata.sqlQuery).toBeDefined();
+    expect(activity!.metadata.sqlQuery).toContain("SELECT org_id");
+    expect(activity!.metadata.sqlQuery).toContain("dbo.Org_Staging");
+  });
+
   it("extracts table from output dataset params (copy-to-staging writes table:dbo.Org_Staging)", () => {
     const result = parsePipelineFile(loadFixture("copy-to-staging.json"));
     const writesTo = result.edges.filter(

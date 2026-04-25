@@ -25,6 +25,7 @@ export interface DataLineageResult {
   direction: LineageDirection;
   paths: LineagePath[];
   columnMappings: ColumnMapping[];
+  truncated?: boolean;
   error?: string;
 }
 
@@ -49,10 +50,10 @@ function pathToSteps(graph: Graph, path: GraphEdge[], direction: LineageDirectio
 /**
  * Collect all activity nodes reachable by standard BFS traversal.
  */
-function collectTraversedActivities(graph: Graph, nodeId: string, direction: LineageDirection): string[] {
+function collectTraversedActivities(graph: Graph, nodeId: string, direction: LineageDirection, maxDepth?: number): string[] {
   const results = direction === "upstream"
-    ? graph.traverseUpstream(nodeId)
-    : graph.traverseDownstream(nodeId);
+    ? graph.traverseUpstream(nodeId, maxDepth)
+    : graph.traverseDownstream(nodeId, maxDepth);
   return results
     .filter((r) => r.node.id.startsWith("activity:"))
     .map((r) => r.node.id);
@@ -75,6 +76,7 @@ export function handleDataLineage(
   entity: string,
   attribute?: string,
   direction: LineageDirection = "upstream",
+  maxDepth?: number,
 ): DataLineageResult {
   // Resolve node ID: try dataverse_entity first, then table
   let nodeId = `dataverse_entity:${entity}`;
@@ -99,7 +101,7 @@ export function handleDataLineage(
 
   if (direction === "upstream") {
     // Standard upstream traversal
-    const traversalResults = graph.traverseUpstream(nodeId);
+    const traversalResults = graph.traverseUpstream(nodeId, maxDepth);
 
     for (const r of traversalResults) {
       if (visitedNodes.has(r.node.id)) continue;
@@ -142,7 +144,7 @@ export function handleDataLineage(
     }
   } else {
     // Downstream: standard traversal from the node
-    const traversalResults = graph.traverseDownstream(nodeId);
+    const traversalResults = graph.traverseDownstream(nodeId, maxDepth);
 
     for (const r of traversalResults) {
       if (visitedNodes.has(r.node.id)) continue;
@@ -221,7 +223,7 @@ export function handleDataLineage(
     }
 
     // Also from standard traversal
-    const traversedActivityIds = collectTraversedActivities(graph, nodeId, direction);
+    const traversedActivityIds = collectTraversedActivities(graph, nodeId, direction, maxDepth);
     for (const id of traversedActivityIds) {
       allActivityIds.add(id);
     }
@@ -249,5 +251,6 @@ export function handleDataLineage(
     direction,
     paths,
     columnMappings,
+    ...(maxDepth !== undefined ? { truncated: true } : {}),
   };
 }

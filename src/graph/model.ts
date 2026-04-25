@@ -118,15 +118,15 @@ export class Graph {
     };
   }
 
-  traverseDownstream(startId: string): TraversalResult[] {
-    return this.bfs(startId, "downstream");
+  traverseDownstream(startId: string, maxDepth?: number): TraversalResult[] {
+    return this.bfs(startId, "downstream", maxDepth);
   }
 
-  traverseUpstream(startId: string): TraversalResult[] {
-    return this.bfs(startId, "upstream");
+  traverseUpstream(startId: string, maxDepth?: number): TraversalResult[] {
+    return this.bfs(startId, "upstream", maxDepth);
   }
 
-  private bfs(startId: string, direction: "downstream" | "upstream"): TraversalResult[] {
+  private bfs(startId: string, direction: "downstream" | "upstream", maxDepth?: number): TraversalResult[] {
     const results: TraversalResult[] = [];
     const visited = new Set<string>([startId]);
     const queue: Array<{ id: string; path: GraphEdge[]; depth: number }> = [
@@ -146,11 +146,14 @@ export class Graph {
         visited.add(nextId);
 
         const nextPath = [...path, edge];
+        const nextDepth = depth + 1;
         const node = this.nodes.get(nextId);
         if (node) {
-          results.push({ node, path: nextPath, depth: depth + 1 });
+          results.push({ node, path: nextPath, depth: nextDepth });
         }
-        queue.push({ id: nextId, path: nextPath, depth: depth + 1 });
+        if (maxDepth === undefined || nextDepth < maxDepth) {
+          queue.push({ id: nextId, path: nextPath, depth: nextDepth });
+        }
       }
     }
 

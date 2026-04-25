@@ -6,12 +6,12 @@
     "url": "https://github.com/HurleySk/adf-graph",
     "source": "github"
   },
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "adf-graph",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "transport": {
         "type": "stdio"
       },
@@ -22,6 +22,8 @@
         { "name": "graph_impact_analysis", "description": "All nodes affected upstream/downstream if an artifact changes" },
         { "name": "graph_data_lineage", "description": "Data flow paths for a Dataverse entity or staging table with optional column filter" },
         { "name": "graph_find_paths", "description": "All dependency paths between two named nodes" },
+        { "name": "graph_search_queries", "description": "Search across all activity SQL and FetchXML for a text pattern" },
+        { "name": "graph_diff_pipeline", "description": "Compare a pipeline's structure across two environments" },
         { "name": "graph_list_environments", "description": "List all configured environments with paths, stats, and staleness" },
         { "name": "graph_add_overlay", "description": "Add an overlay path to an environment for merged graph views" },
         { "name": "graph_remove_overlay", "description": "Remove a runtime overlay from an environment" },
