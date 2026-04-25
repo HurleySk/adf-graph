@@ -147,4 +147,35 @@ describe("Graph", () => {
     expect(cloned.stats().nodeCount).toBe(0);
     expect(cloned.stats().edgeCount).toBe(0);
   });
+
+  it("replaceNode replaces an existing node's data", () => {
+    const g = new Graph();
+    g.addNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A", metadata: { v: 1 } });
+    g.replaceNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A-updated", metadata: { v: 2 } });
+    expect(g.getNode("pipeline:A")!.name).toBe("A-updated");
+    expect(g.getNode("pipeline:A")!.metadata).toEqual({ v: 2 });
+  });
+
+  it("replaceNode adds the node if it didn't exist", () => {
+    const g = new Graph();
+    g.replaceNode({ id: "pipeline:X", type: NodeType.Pipeline, name: "X", metadata: {} });
+    expect(g.getNode("pipeline:X")).toBeDefined();
+  });
+
+  it("removeEdgesForNode removes all outgoing and incoming edges for a node", () => {
+    const g = new Graph();
+    g.addNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A", metadata: {} });
+    g.addNode({ id: "pipeline:B", type: NodeType.Pipeline, name: "B", metadata: {} });
+    g.addNode({ id: "pipeline:C", type: NodeType.Pipeline, name: "C", metadata: {} });
+    g.addEdge({ from: "pipeline:A", to: "pipeline:B", type: EdgeType.Executes, metadata: {} });
+    g.addEdge({ from: "pipeline:C", to: "pipeline:A", type: EdgeType.DependsOn, metadata: {} });
+    g.addEdge({ from: "pipeline:B", to: "pipeline:C", type: EdgeType.Executes, metadata: {} });
+
+    g.removeEdgesForNode("pipeline:A");
+
+    expect(g.getOutgoing("pipeline:A")).toHaveLength(0);
+    expect(g.getIncoming("pipeline:A")).toHaveLength(0);
+    expect(g.getOutgoing("pipeline:B")).toHaveLength(1);
+    expect(g.getIncoming("pipeline:C")).toHaveLength(1);
+  });
 });

@@ -192,6 +192,38 @@ export class Graph {
     return copy;
   }
 
+  replaceNode(node: GraphNode): void {
+    this.nodes.set(node.id, node);
+    if (!this.outgoing.has(node.id)) {
+      this.outgoing.set(node.id, []);
+    }
+    if (!this.incoming.has(node.id)) {
+      this.incoming.set(node.id, []);
+    }
+  }
+
+  removeEdgesForNode(id: string): void {
+    const outgoing = this.outgoing.get(id) ?? [];
+    for (const edge of outgoing) {
+      const targetIncoming = this.incoming.get(edge.to);
+      if (targetIncoming) {
+        const filtered = targetIncoming.filter((e) => e.from !== id);
+        this.incoming.set(edge.to, filtered);
+      }
+    }
+    this.outgoing.set(id, []);
+
+    const incoming = this.incoming.get(id) ?? [];
+    for (const edge of incoming) {
+      const sourceOutgoing = this.outgoing.get(edge.from);
+      if (sourceOutgoing) {
+        const filtered = sourceOutgoing.filter((e) => e.to !== id);
+        this.outgoing.set(edge.from, filtered);
+      }
+    }
+    this.incoming.set(id, []);
+  }
+
   getAllReferencedIds(): Set<string> {
     const ids = new Set<string>();
     for (const edges of this.outgoing.values()) {
