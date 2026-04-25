@@ -137,6 +137,9 @@ describe("mergeOverlayInto", () => {
     expect(containsEdges).toHaveLength(3);
 
     expect(base.getNode("pipeline:New")).toBeDefined();
+    const executesEdges = base.getOutgoing("pipeline:New").filter((e) => e.type === EdgeType.Executes);
+    expect(executesEdges).toHaveLength(1);
+    expect(executesEdges[0].to).toBe("pipeline:Real");
   });
 
   it("adds stub nodes when target does not have the node", () => {
