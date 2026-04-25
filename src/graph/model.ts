@@ -179,6 +179,11 @@ export class Graph {
     return results;
   }
 
+  allNodes(): GraphNode[] {
+    return Array.from(this.nodes.values());
+  }
+
+  // Shallow metadata copy — sufficient for current scalar-valued metadata.
   clone(): Graph {
     const copy = new Graph();
     for (const node of this.nodes.values()) {

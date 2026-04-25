@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { join, extname } from "path";
-import { Graph, GraphNode, GraphEdge, NodeType } from "./model.js";
+import { Graph, GraphNode, GraphEdge } from "./model.js";
 import { parsePipelineFile } from "../parsers/pipeline.js";
 import { parseDatasetFile } from "../parsers/dataset.js";
 import { buildGraph } from "./builder.js";
@@ -38,6 +38,29 @@ function hasAdfStructure(dirPath: string): boolean {
   return adfDirs.some((d) => existsSync(join(dirPath, d)));
 }
 
+function parseJsonArtifact(filePath: string, label: string): OverlayScanResult {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const warnings: string[] = [];
+
+  try {
+    const json = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
+    const artifactType = detectArtifactType(json);
+    if (artifactType === "pipeline") {
+      const result = parsePipelineFile(json);
+      nodes.push(...result.nodes); edges.push(...result.edges); warnings.push(...result.warnings);
+    } else if (artifactType === "dataset") {
+      const result = parseDatasetFile(json);
+      nodes.push(...result.nodes); edges.push(...result.edges); warnings.push(...result.warnings);
+    } else {
+      warnings.push(`Could not determine artifact type for '${label}' — skipping`);
+    }
+  } catch (err) {
+    warnings.push(`Failed to parse overlay file '${label}': ${String(err)}`);
+  }
+  return { nodes, edges, warnings };
+}
+
 function scanLooseFiles(dirPath: string): OverlayScanResult {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
@@ -67,63 +90,23 @@ function scanLooseFiles(dirPath: string): OverlayScanResult {
     if (ext === ".sql") continue;
     if (ext !== ".json") continue;
 
-    try {
-      const json = JSON.parse(readFileSync(fullPath, "utf-8")) as unknown;
-      const artifactType = detectArtifactType(json);
-      if (artifactType === "pipeline") {
-        const result = parsePipelineFile(json);
-        nodes.push(...result.nodes); edges.push(...result.edges); warnings.push(...result.warnings);
-      } else if (artifactType === "dataset") {
-        const result = parseDatasetFile(json);
-        nodes.push(...result.nodes); edges.push(...result.edges); warnings.push(...result.warnings);
-      } else {
-        warnings.push(`Could not determine artifact type for '${entry}' — skipping`);
-      }
-    } catch (err) {
-      warnings.push(`Failed to parse overlay file '${entry}': ${String(err)}`);
-    }
+    const result = parseJsonArtifact(fullPath, entry);
+    nodes.push(...result.nodes); edges.push(...result.edges); warnings.push(...result.warnings);
   }
   return { nodes, edges, warnings };
 }
 
 function scanSingleFile(filePath: string): OverlayScanResult {
-  const nodes: GraphNode[] = [];
-  const edges: GraphEdge[] = [];
-  const warnings: string[] = [];
-  const entry = filePath.split(/[\\/]/).pop() ?? filePath;
   const ext = extname(filePath).toLowerCase();
-  if (ext !== ".json") return { nodes, edges, warnings };
-
-  try {
-    const json = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-    const artifactType = detectArtifactType(json);
-    if (artifactType === "pipeline") {
-      const result = parsePipelineFile(json);
-      nodes.push(...result.nodes); edges.push(...result.edges); warnings.push(...result.warnings);
-    } else if (artifactType === "dataset") {
-      const result = parseDatasetFile(json);
-      nodes.push(...result.nodes); edges.push(...result.edges); warnings.push(...result.warnings);
-    } else {
-      warnings.push(`Could not determine artifact type for '${entry}' — skipping`);
-    }
-  } catch (err) {
-    warnings.push(`Failed to parse overlay file '${entry}': ${String(err)}`);
-  }
-  return { nodes, edges, warnings };
-}
-
-function getAllNodes(graph: Graph): GraphNode[] {
-  const nodes: GraphNode[] = [];
-  for (const type of Object.values(NodeType)) {
-    nodes.push(...graph.getNodesByType(type));
-  }
-  return nodes;
+  if (ext !== ".json") return { nodes: [], edges: [], warnings: [] };
+  const label = filePath.split(/[\\/]/).pop() ?? filePath;
+  return parseJsonArtifact(filePath, label);
 }
 
 function getAllEdges(graph: Graph): GraphEdge[] {
   const edges: GraphEdge[] = [];
   const seen = new Set<string>();
-  for (const node of getAllNodes(graph)) {
+  for (const node of graph.allNodes()) {
     for (const edge of graph.getOutgoing(node.id)) {
       const key = `${edge.from}|${edge.to}|${edge.type}`;
       if (!seen.has(key)) { seen.add(key); edges.push(edge); }
@@ -146,7 +129,7 @@ export function scanOverlayPath(overlayPath: string): OverlayScanResult {
   if (hasAdfStructure(overlayPath)) {
     const buildResult = buildGraph(overlayPath);
     return {
-      nodes: getAllNodes(buildResult.graph),
+      nodes: buildResult.graph.allNodes(),
       edges: getAllEdges(buildResult.graph),
       warnings: buildResult.warnings,
     };
@@ -155,7 +138,7 @@ export function scanOverlayPath(overlayPath: string): OverlayScanResult {
 }
 
 export function mergeOverlayInto(target: Graph, overlay: Graph): void {
-  const overlayNodes = getAllNodes(overlay);
+  const overlayNodes = overlay.allNodes();
   const overlayEdges = getAllEdges(overlay);
 
   for (const node of overlayNodes) {
