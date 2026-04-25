@@ -142,6 +142,9 @@ export function mergeOverlayInto(target: Graph, overlay: Graph): void {
   const overlayEdges = getAllEdges(overlay);
 
   for (const node of overlayNodes) {
+    if (node.metadata?.stub && target.getNode(node.id)) {
+      continue;
+    }
     if (target.getNode(node.id)) {
       target.removeEdgesForNode(node.id);
     }

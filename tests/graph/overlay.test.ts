@@ -111,4 +111,45 @@ describe("mergeOverlayInto", () => {
     expect(outgoing[0].to).toBe("pipeline:C");
     expect(base.getNode("pipeline:C")).toBeDefined();
   });
+
+  it("does not overwrite real nodes with stub nodes", () => {
+    const base = new Graph();
+    base.addNode({ id: "pipeline:Real", type: NodeType.Pipeline, name: "Real", metadata: {} });
+    base.addNode({ id: "activity:Act1", type: NodeType.Activity, name: "Act1", metadata: {} });
+    base.addNode({ id: "activity:Act2", type: NodeType.Activity, name: "Act2", metadata: {} });
+    base.addNode({ id: "activity:Act3", type: NodeType.Activity, name: "Act3", metadata: {} });
+    base.addEdge({ from: "pipeline:Real", to: "activity:Act1", type: EdgeType.Contains, metadata: {} });
+    base.addEdge({ from: "pipeline:Real", to: "activity:Act2", type: EdgeType.Contains, metadata: {} });
+    base.addEdge({ from: "pipeline:Real", to: "activity:Act3", type: EdgeType.Contains, metadata: {} });
+
+    const overlay = new Graph();
+    overlay.addNode({ id: "pipeline:Real", type: NodeType.Pipeline, name: "Real-stub", metadata: { stub: true } });
+    overlay.addNode({ id: "pipeline:New", type: NodeType.Pipeline, name: "New", metadata: {} });
+    overlay.addEdge({ from: "pipeline:New", to: "pipeline:Real", type: EdgeType.Executes, metadata: {} });
+
+    mergeOverlayInto(base, overlay);
+
+    const realNode = base.getNode("pipeline:Real")!;
+    expect(realNode.name).toBe("Real");
+    expect(realNode.metadata.stub).toBeUndefined();
+
+    const containsEdges = base.getOutgoing("pipeline:Real").filter((e) => e.type === EdgeType.Contains);
+    expect(containsEdges).toHaveLength(3);
+
+    expect(base.getNode("pipeline:New")).toBeDefined();
+  });
+
+  it("adds stub nodes when target does not have the node", () => {
+    const base = new Graph();
+    base.addNode({ id: "pipeline:Existing", type: NodeType.Pipeline, name: "Existing", metadata: {} });
+
+    const overlay = new Graph();
+    overlay.addNode({ id: "pipeline:Unknown", type: NodeType.Pipeline, name: "Unknown", metadata: { stub: true } });
+
+    mergeOverlayInto(base, overlay);
+
+    const stubNode = base.getNode("pipeline:Unknown");
+    expect(stubNode).toBeDefined();
+    expect(stubNode!.metadata.stub).toBe(true);
+  });
 });
