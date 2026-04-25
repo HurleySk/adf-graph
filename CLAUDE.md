@@ -13,8 +13,9 @@ MCP server that builds a queryable dependency graph from ADF pipeline artifacts.
 - `src/config.ts` — Config loader (ADF_CONFIG / adf-graph.json / ADF_ROOT fallback)
 - `src/graph/model.ts` — Graph data structure (nodes, edges, adjacency lists)
 - `src/graph/builder.ts` — 4-pass graph builder (pipelines → datasets → SQL → enrichment)
-- `src/graph/staleness.ts` — File mtime tracking, rebuild-if-stale
-- `src/graph/manager.ts` — Multi-environment graph manager (lazy build, per-env staleness)
+- `src/graph/staleness.ts` — File mtime tracking, rebuild-if-stale (multi-path aware)
+- `src/graph/overlay.ts` — Artifact type detection, overlay scanning (structured + loose), graph merge
+- `src/graph/manager.ts` — Multi-environment graph manager (lazy build, per-env staleness, overlay merge views)
 - `src/parsers/` — One parser per artifact type (pipeline, dataset, sql, columns)
 - `src/tools/` — One file per MCP tool
 - `src/server.ts` — MCP server entry point, tool registration
@@ -45,6 +46,29 @@ Or set `ADF_CONFIG=/absolute/path/to/adf-graph.json` to use a file at an arbitra
 
 `ADF_ROOT` env var — path to a directory containing ADF artifacts (`pipeline/`, `dataset/`, etc.).
 Behaves exactly as before; creates a single environment named `"default"`.
+
+### Overlays
+
+Environments can have an optional `overlays` array to layer local/in-progress files on top:
+
+```json
+{
+  "environments": {
+    "work-repo": {
+      "path": "C:/repos/adf-main",
+      "default": true,
+      "overlays": ["C:/my-wip/", "C:/one-off/NewPipeline.json"]
+    }
+  }
+}
+```
+
+- Overlay directories with ADF structure (`pipeline/`, `dataset/`) are parsed normally.
+- Loose files are auto-detected by inspecting JSON content.
+- The base graph stays clean; a merged view appears as `{name}+overlays`.
+- Runtime overlays can be added/removed via MCP tools (`graph_add_overlay`, `graph_remove_overlay`).
+- Runtime environments can be registered via `graph_add_environment`.
+- Runtime additions are ephemeral (lost on server restart).
 
 ### Priority
 
