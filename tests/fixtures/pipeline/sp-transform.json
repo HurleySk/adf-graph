@@ -7,7 +7,11 @@
         "type": "SqlServerStoredProcedure",
         "dependsOn": [],
         "typeProperties": {
-          "storedProcedureName": "[dbo].[p_Transform_Org]"
+          "storedProcedureName": "[dbo].[p_Transform_Org]",
+          "storedProcedureParameters": {
+            "batch_id": { "type": "Int32", "value": "100" },
+            "run_mode": { "type": "String", "value": "full_refresh" }
+          }
         },
         "linkedServiceName": {
           "referenceName": "ls_sql_staging",

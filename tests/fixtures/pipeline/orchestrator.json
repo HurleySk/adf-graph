@@ -45,7 +45,10 @@
             "referenceName": "Copy_To_Dataverse",
             "type": "PipelineReference"
           },
-          "waitOnCompletion": true
+          "waitOnCompletion": true,
+          "parameters": {
+            "dataverse_query": "<fetch><entity name='alm_organization'><attribute name='alm_orgid'/></entity></fetch>"
+          }
         }
       }
     ],
