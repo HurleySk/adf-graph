@@ -3,6 +3,14 @@ import { join } from "path";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "fs";
 import { loadConfig } from "../src/config.js";
 
+const _shared = vi.hoisted(() => ({ real: null as null | ((...a: any[]) => any) }));
+
+vi.mock("fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs")>();
+  _shared.real = actual.existsSync;
+  return { ...actual, existsSync: vi.fn(actual.existsSync) };
+});
+
 const tmpDir = join(import.meta.dirname, ".tmp-config");
 
 function setup(): void {
@@ -54,6 +62,7 @@ beforeEach(() => {
 
 afterEach(() => {
   restoreEnv();
+  vi.mocked(existsSync).mockReset().mockImplementation(_shared.real!);
 });
 
 describe("loadConfig", () => {
@@ -109,6 +118,9 @@ describe("loadConfig", () => {
 
   describe("ADF_ROOT fallback", () => {
     it("returns single default environment from ADF_ROOT when no config file", () => {
+      vi.mocked(existsSync).mockImplementation((p) =>
+        String(p).endsWith("adf-graph.json") ? false : _shared.real!(p),
+      );
       setEnv({ ADF_ROOT: "/my/adf/root" });
 
       const config = loadConfig();
@@ -121,8 +133,9 @@ describe("loadConfig", () => {
 
   describe("error when nothing configured", () => {
     it("throws a helpful error when no env vars and no config file", () => {
-      // Both ADF_CONFIG and ADF_ROOT are cleared in beforeEach
-      // The sidecar file (adf-graph.json next to dist/) won't exist in test env
+      vi.mocked(existsSync).mockImplementation((p) =>
+        String(p).endsWith("adf-graph.json") ? false : _shared.real!(p),
+      );
       expect(() => loadConfig()).toThrow(/no configuration found/);
     });
   });
