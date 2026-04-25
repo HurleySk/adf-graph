@@ -113,7 +113,7 @@ export class GraphManager {
       // Derived merged view if overlays exist
       if (overlays.length > 0) {
         const mergedName = name + OVERLAY_SUFFIX;
-        result.push(this.buildEnvInfo(mergedName, cfg.path, "derived", true));
+        result.push(this.buildEnvInfo(mergedName, cfg.path, "derived", false));
       }
     }
 
@@ -124,7 +124,7 @@ export class GraphManager {
 
       if (overlays.length > 0) {
         const mergedName = name + OVERLAY_SUFFIX;
-        result.push(this.buildEnvInfo(mergedName, rt.path, "derived", true));
+        result.push(this.buildEnvInfo(mergedName, rt.path, "derived", false));
       }
     }
 
@@ -151,7 +151,9 @@ export class GraphManager {
 
   /** Remove a runtime overlay. Config-based overlays cannot be removed. */
   removeOverlay(env: string, path: string): { removed: boolean; isConfigOverlay?: boolean } {
-    // Check if it's a config-based overlay
+    if (!this.resolveEnvPath(env)) {
+      throw new Error(`adf-graph: unknown environment '${env}'`);
+    }
     const configOverlays = this.getConfigOverlays(env);
     if (configOverlays.includes(path)) {
       return { removed: false, isConfigOverlay: true };
@@ -178,6 +180,9 @@ export class GraphManager {
 
   /** List all overlays (config + runtime) for an environment. */
   listOverlays(env: string): Array<{ path: string; source: "config" | "runtime" }> {
+    if (!this.resolveEnvPath(env)) {
+      throw new Error(`adf-graph: unknown environment '${env}'`);
+    }
     const result: Array<{ path: string; source: "config" | "runtime" }> = [];
 
     for (const p of this.getConfigOverlays(env)) {
@@ -223,6 +228,7 @@ export class GraphManager {
     this.runtimeOverlays.delete(name);
     this.graphs.delete(name);
     this.graphs.delete(name + OVERLAY_SUFFIX);
+    this.defaultEnv = this.resolveDefaultEnvironment();
 
     return { removed: true };
   }
@@ -362,15 +368,22 @@ export class GraphManager {
         return name;
       }
     }
-    // Fall back to the first key
+    // Fall back to the first config key
     const first = Object.keys(envs)[0];
-    if (!first) {
-      throw new Error("adf-graph: no environments defined in config");
+    if (first) {
+      if (this.getEffectiveOverlays(first).length > 0) {
+        return first + OVERLAY_SUFFIX;
+      }
+      return first;
     }
-    // Check if first env has overlays
-    if (this.getEffectiveOverlays(first).length > 0) {
-      return first + OVERLAY_SUFFIX;
+    // Fall back to the first runtime env
+    const firstRuntime = this.runtimeEnvs.keys().next().value;
+    if (firstRuntime) {
+      if (this.getEffectiveOverlays(firstRuntime).length > 0) {
+        return firstRuntime + OVERLAY_SUFFIX;
+      }
+      return firstRuntime;
     }
-    return first;
+    throw new Error("adf-graph: no environments defined");
   }
 }
