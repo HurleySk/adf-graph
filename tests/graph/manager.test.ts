@@ -5,6 +5,7 @@ import { GraphManager } from "../../src/graph/manager.js";
 import type { AdfGraphConfig } from "../../src/config.js";
 
 const fixtureRoot = join(import.meta.dirname, "../fixtures");
+const overlayStructuredDir = join(fixtureRoot, "overlay-structured");
 const tmpDir = join(import.meta.dirname, "../.tmp-manager");
 
 function setup(): void {
@@ -194,6 +195,148 @@ describe("GraphManager", () => {
       expect(info.edgeCount).toBeGreaterThan(0);
       expect(info.lastBuild).toBeInstanceOf(Date);
       expect(info.isStale).toBe(false);
+    });
+  });
+
+  describe("overlay support", () => {
+    it("creates a merged view when config has overlays", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, default: true, overlays: [overlayStructuredDir] } }),
+      );
+      const envs = mgr.listEnvironments();
+      const names = envs.map((e) => e.name);
+      expect(names).toContain("main");
+      expect(names).toContain("main+overlays");
+    });
+
+    it("merged view contains overlay nodes", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, default: true, overlays: [overlayStructuredDir] } }),
+      );
+      const merged = mgr.ensureGraph("main+overlays");
+      expect(merged.graph.getNode("pipeline:OverlayPipeline")).toBeDefined();
+    });
+
+    it("base graph does NOT contain overlay nodes", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, default: true, overlays: [overlayStructuredDir] } }),
+      );
+      const base = mgr.ensureGraph("main");
+      expect(base.graph.getNode("pipeline:OverlayPipeline")).toBeUndefined();
+    });
+
+    it("default env resolves to merged view when overlays exist", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, default: true, overlays: [overlayStructuredDir] } }),
+      );
+      expect(mgr.getDefaultEnvironment()).toBe("main+overlays");
+    });
+
+    it("default env is base when no overlays", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, default: true } }),
+      );
+      expect(mgr.getDefaultEnvironment()).toBe("main");
+    });
+
+    it("merged view disappears when overlays are empty array", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, default: true, overlays: [] } }),
+      );
+      const envs = mgr.listEnvironments();
+      expect(envs.map((e) => e.name)).not.toContain("main+overlays");
+    });
+
+    it("listEnvironments shows source and hasOverlays fields", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, default: true, overlays: [overlayStructuredDir] } }),
+      );
+      const envs = mgr.listEnvironments();
+      const main = envs.find((e) => e.name === "main")!;
+      expect(main.source).toBe("config");
+      expect(main.hasOverlays).toBe(true);
+      const merged = envs.find((e) => e.name === "main+overlays")!;
+      expect(merged.source).toBe("derived");
+    });
+  });
+
+  describe("runtime overlay management", () => {
+    it("addOverlay creates a merged view", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot, default: true } }));
+      mgr.addOverlay("main", overlayStructuredDir);
+      const envs = mgr.listEnvironments();
+      expect(envs.map((e) => e.name)).toContain("main+overlays");
+    });
+
+    it("removeOverlay removes a runtime overlay", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot, default: true } }));
+      mgr.addOverlay("main", overlayStructuredDir);
+      const { removed } = mgr.removeOverlay("main", overlayStructuredDir);
+      expect(removed).toBe(true);
+      expect(mgr.listEnvironments().map((e) => e.name)).not.toContain("main+overlays");
+    });
+
+    it("removeOverlay rejects config-based overlays", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, overlays: [overlayStructuredDir] } }),
+      );
+      const { removed, isConfigOverlay } = mgr.removeOverlay("main", overlayStructuredDir);
+      expect(removed).toBe(false);
+      expect(isConfigOverlay).toBe(true);
+    });
+
+    it("listOverlays shows config and runtime overlays", () => {
+      const mgr = new GraphManager(
+        makeConfig({ main: { path: fixtureRoot, overlays: ["/config/path"] } }),
+      );
+      mgr.addOverlay("main", "/runtime/path");
+      const overlays = mgr.listOverlays("main");
+      expect(overlays).toEqual([
+        { path: "/config/path", source: "config" },
+        { path: "/runtime/path", source: "runtime" },
+      ]);
+    });
+  });
+
+  describe("runtime environment management", () => {
+    it("addEnvironment registers a new environment", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot } }));
+      mgr.addEnvironment("new-env", fixtureRoot);
+      const envs = mgr.listEnvironments();
+      expect(envs.find((e) => e.name === "new-env")).toBeDefined();
+      expect(envs.find((e) => e.name === "new-env")!.source).toBe("runtime");
+    });
+
+    it("addEnvironment rejects config name collision", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot } }));
+      expect(() => mgr.addEnvironment("main", "/other")).toThrow(/conflicts/);
+    });
+
+    it("addEnvironment rejects names with +", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot } }));
+      expect(() => mgr.addEnvironment("bad+name", "/path")).toThrow(/cannot contain/);
+    });
+
+    it("removeEnvironment removes a runtime env", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot } }));
+      mgr.addEnvironment("temp", fixtureRoot);
+      const { removed } = mgr.removeEnvironment("temp");
+      expect(removed).toBe(true);
+      expect(mgr.listEnvironments().find((e) => e.name === "temp")).toBeUndefined();
+    });
+
+    it("removeEnvironment rejects config env", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot } }));
+      const { removed, isConfigEnv } = mgr.removeEnvironment("main");
+      expect(removed).toBe(false);
+      expect(isConfigEnv).toBe(true);
+    });
+
+    it("ensureGraph works for runtime environments", () => {
+      const mgr = new GraphManager(makeConfig({ main: { path: fixtureRoot } }));
+      mgr.addEnvironment("rt", fixtureRoot);
+      const { graph } = mgr.ensureGraph("rt");
+      expect(graph.stats().nodeCount).toBeGreaterThan(0);
     });
   });
 });
