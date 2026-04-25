@@ -52,6 +52,18 @@ describe("handleDiffPipeline", () => {
     expect(result.summary.modified).toBe(1);
   });
 
+  it("detects modified activities when storedProcedureName differs", () => {
+    const { graph: graphA } = buildGraph(fixtureRoot);
+    const { graph: graphB } = buildGraph(fixtureRoot);
+    const actNode = graphB.getNode("activity:SP_Transform/Run p_Transform_Org");
+    expect(actNode).toBeDefined();
+    actNode!.metadata.storedProcedureName = "dbo.p_Transform_Org_V2";
+    const result = handleDiffPipeline(graphA, graphB, "SP_Transform", "envA", "envB");
+    const modified = result.activityDiffs.find((d) => d.status === "modified");
+    expect(modified).toBeDefined();
+    expect(modified!.changes!.some((c) => c.includes("storedProcedureName"))).toBe(true);
+  });
+
   it("detects parameter changes between environments", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);

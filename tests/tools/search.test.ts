@@ -36,6 +36,39 @@ describe("handleSearchQueries", () => {
     expect(result.matches).toEqual([]);
   });
 
+  it("finds activities by stored procedure name", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleSearchQueries(graph, "p_Transform_Org");
+    expect(result.matches.length).toBeGreaterThanOrEqual(1);
+    const spMatch = result.matches.find((m) => m.field === "storedProcedureName");
+    expect(spMatch).toBeDefined();
+    expect(spMatch!.pipeline).toBe("SP_Transform");
+  });
+
+  it("finds activities by stored procedure parameter value", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleSearchQueries(graph, "full_refresh");
+    expect(result.matches.length).toBeGreaterThanOrEqual(1);
+    const spMatch = result.matches.find((m) => m.field === "storedProcedureParameters");
+    expect(spMatch).toBeDefined();
+    expect(spMatch!.pipeline).toBe("SP_Transform");
+  });
+
+  it("finds ExecutePipeline activities by parameter value (FetchXML)", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleSearchQueries(graph, "alm_organization");
+    const execMatch = result.matches.find((m) => m.field === "pipelineParameters");
+    expect(execMatch).toBeDefined();
+    expect(execMatch!.pipeline).toBe("Test_Orchestrator");
+  });
+
+  it("SP name search is case-insensitive", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleSearchQueries(graph, "p_transform_org");
+    const spMatch = result.matches.find((m) => m.field === "storedProcedureName");
+    expect(spMatch).toBeDefined();
+  });
+
   it("includes snippet with the full query text", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleSearchQueries(graph, "SELECT org_id");

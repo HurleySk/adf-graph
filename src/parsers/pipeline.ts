@@ -102,6 +102,12 @@ export function parsePipelineFile(json: unknown): ParseResult {
           });
         }
       }
+
+      const execParams = typeProperties?.parameters as Record<string, unknown> | undefined;
+      if (execParams && Object.keys(execParams).length > 0) {
+        const actNode = nodes.find(n => n.id === activityId)!;
+        actNode.metadata.pipelineParameters = execParams;
+      }
     }
 
     // Copy activity
@@ -189,6 +195,13 @@ export function parsePipelineFile(json: unknown): ParseResult {
           type: EdgeType.CallsSp,
           metadata: {},
         });
+
+        const actNode = nodes.find(n => n.id === activityId)!;
+        actNode.metadata.storedProcedureName = normalized;
+        const spParams = typeProperties?.storedProcedureParameters as Record<string, unknown> | undefined;
+        if (spParams) {
+          actNode.metadata.storedProcedureParameters = spParams;
+        }
       }
     }
   }

@@ -83,6 +83,40 @@ describe("parsePipelineFile", () => {
     expect(activity!.metadata.sqlQuery).toContain("dbo.Org_Staging");
   });
 
+  it("stores storedProcedureName in activity metadata (sp-transform)", () => {
+    const result = parsePipelineFile(loadFixture("sp-transform.json"));
+    const activity = result.nodes.find((n) => n.id === "activity:SP_Transform/Run p_Transform_Org");
+    expect(activity).toBeDefined();
+    expect(activity!.metadata.storedProcedureName).toBe("dbo.p_Transform_Org");
+  });
+
+  it("stores storedProcedureParameters in activity metadata (sp-transform)", () => {
+    const result = parsePipelineFile(loadFixture("sp-transform.json"));
+    const activity = result.nodes.find((n) => n.id === "activity:SP_Transform/Run p_Transform_Org");
+    expect(activity).toBeDefined();
+    const params = activity!.metadata.storedProcedureParameters as Record<string, unknown>;
+    expect(params).toBeDefined();
+    expect(params).toHaveProperty("batch_id");
+    expect(params).toHaveProperty("run_mode");
+  });
+
+  it("stores pipelineParameters in activity metadata (orchestrator ExecutePipeline)", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const activity = result.nodes.find((n) => n.id === "activity:Test_Orchestrator/Run Copy To Dataverse");
+    expect(activity).toBeDefined();
+    const params = activity!.metadata.pipelineParameters as Record<string, unknown>;
+    expect(params).toBeDefined();
+    expect(params).toHaveProperty("dataverse_query");
+    expect(params.dataverse_query).toContain("<fetch>");
+  });
+
+  it("omits pipelineParameters when none specified (orchestrator ExecutePipeline)", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const activity = result.nodes.find((n) => n.id === "activity:Test_Orchestrator/Run Copy To Staging");
+    expect(activity).toBeDefined();
+    expect(activity!.metadata.pipelineParameters).toBeUndefined();
+  });
+
   it("extracts table from output dataset params (copy-to-staging writes table:dbo.Org_Staging)", () => {
     const result = parsePipelineFile(loadFixture("copy-to-staging.json"));
     const writesTo = result.edges.filter(

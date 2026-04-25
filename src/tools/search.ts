@@ -4,7 +4,7 @@ export interface SearchMatch {
   pipeline: string;
   activity: string;
   activityType: string;
-  field: "sqlQuery" | "fetchXmlQuery";
+  field: "sqlQuery" | "fetchXmlQuery" | "storedProcedureName" | "storedProcedureParameters" | "pipelineParameters";
   snippet: string;
 }
 
@@ -25,9 +25,24 @@ export function handleSearchQueries(
     const slashIdx = activity.id.indexOf("/");
     const pipeline = activity.id.slice("activity:".length, slashIdx);
 
-    for (const field of ["sqlQuery", "fetchXmlQuery"] as const) {
+    for (const field of ["sqlQuery", "fetchXmlQuery", "storedProcedureName"] as const) {
       const text = activity.metadata[field];
       if (typeof text !== "string") continue;
+      if (text.toLowerCase().includes(lowerQuery)) {
+        matches.push({
+          pipeline,
+          activity: activity.name,
+          activityType: (activity.metadata.activityType as string) ?? "Unknown",
+          field,
+          snippet: text,
+        });
+      }
+    }
+
+    for (const field of ["storedProcedureParameters", "pipelineParameters"] as const) {
+      const obj = activity.metadata[field];
+      if (!obj || typeof obj !== "object") continue;
+      const text = JSON.stringify(obj);
       if (text.toLowerCase().includes(lowerQuery)) {
         matches.push({
           pipeline,

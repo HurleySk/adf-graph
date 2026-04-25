@@ -11,6 +11,9 @@ export interface ActivityInfo {
   columnMappings?: Array<{ sourceColumn: string | null; sinkColumn: string | null }>;
   sqlQuery?: string;
   fetchXmlQuery?: string;
+  storedProcedureName?: string;
+  storedProcedureParameters?: Record<string, unknown>;
+  pipelineParameters?: Record<string, unknown>;
 }
 
 export interface PipelineSummary {
@@ -143,6 +146,15 @@ export function handleDescribePipeline(
       }
       if (activityNode.metadata.fetchXmlQuery) {
         activityInfo.fetchXmlQuery = activityNode.metadata.fetchXmlQuery as string;
+      }
+      if (activityNode.metadata.storedProcedureName) {
+        activityInfo.storedProcedureName = activityNode.metadata.storedProcedureName as string;
+      }
+      if (activityNode.metadata.storedProcedureParameters) {
+        activityInfo.storedProcedureParameters = activityNode.metadata.storedProcedureParameters as Record<string, unknown>;
+      }
+      if (activityNode.metadata.pipelineParameters) {
+        activityInfo.pipelineParameters = activityNode.metadata.pipelineParameters as Record<string, unknown>;
       }
     }
 

@@ -58,6 +58,34 @@ describe("handleDescribePipeline", () => {
     expect(upsert!.sqlQuery).toContain("dbo.Org_Staging");
   });
 
+  it("full depth: exposes storedProcedureName on SP activities", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "SP_Transform", "full");
+    expect(result.activities).toBeDefined();
+    const sp = result.activities!.find((a) => a.name === "Run p_Transform_Org");
+    expect(sp).toBeDefined();
+    expect(sp!.storedProcedureName).toBe("dbo.p_Transform_Org");
+  });
+
+  it("full depth: exposes storedProcedureParameters on SP activities", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "SP_Transform", "full");
+    const sp = result.activities!.find((a) => a.name === "Run p_Transform_Org");
+    expect(sp).toBeDefined();
+    expect(sp!.storedProcedureParameters).toBeDefined();
+    expect(sp!.storedProcedureParameters).toHaveProperty("batch_id");
+    expect(sp!.storedProcedureParameters).toHaveProperty("run_mode");
+  });
+
+  it("full depth: exposes pipelineParameters on ExecutePipeline activities", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Test_Orchestrator", "full");
+    const runCopy = result.activities!.find((a) => a.name === "Run Copy To Dataverse");
+    expect(runCopy).toBeDefined();
+    expect(runCopy!.pipelineParameters).toBeDefined();
+    expect(runCopy!.pipelineParameters!.dataverse_query).toContain("<fetch>");
+  });
+
   it("returns error for unknown pipeline", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDescribePipeline(graph, "NonExistentPipeline", "summary");

@@ -60,6 +60,18 @@ function diffActivity(a: ActivityInfo, b: ActivityInfo): string[] {
     changes.push(`fetchXmlQuery changed`);
   }
 
+  if (a.storedProcedureName !== b.storedProcedureName) {
+    changes.push(`storedProcedureName changed`);
+  }
+
+  if (JSON.stringify(a.storedProcedureParameters) !== JSON.stringify(b.storedProcedureParameters)) {
+    changes.push(`storedProcedureParameters changed`);
+  }
+
+  if (JSON.stringify(a.pipelineParameters) !== JSON.stringify(b.pipelineParameters)) {
+    changes.push(`pipelineParameters changed`);
+  }
+
   const colsA = a.columnMappings ?? [];
   const colsB = b.columnMappings ?? [];
   if (!arraysEqual(colsA, colsB)) {
