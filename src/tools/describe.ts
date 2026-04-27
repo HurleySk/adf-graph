@@ -9,6 +9,7 @@ export interface ActivityInfo {
   name: string;
   activityType: string;
   dependsOn: string[];
+  parentActivity?: string;
   sources?: string[];
   sinks?: string[];
   columnMappings?: Array<{ sourceColumn: string | null; sinkColumn: string | null }>;
@@ -45,6 +46,7 @@ export function handleDescribePipeline(
   graph: Graph,
   pipeline: string,
   depth: DescribeDepth = "summary",
+  activity?: string,
 ): DescribePipelineResult {
   const lookup = lookupPipelineNode(graph, pipeline);
   if (lookup.error !== undefined) {
@@ -94,68 +96,92 @@ export function handleDescribePipeline(
 
   const result: DescribePipelineResult = { pipeline, summary };
 
-  if (depth === "summary") {
+  if (depth === "summary" && !activity) {
     return result;
   }
 
-  // Build activity info
-  const containedEdges = outgoing.filter((e) => e.type === EdgeType.Contains);
-  const activities: ActivityInfo[] = [];
+  const effectiveDepth = activity ? "full" : depth;
 
-  for (const containsEdge of containedEdges) {
-    const activityNode = graph.getNode(containsEdge.to);
-    if (!activityNode) continue;
+  // Recursively collect activities through the Contains tree
+  function collectActivities(parentId: string, parentName?: string): ActivityInfo[] {
+    const parentOutgoing = graph.getOutgoing(parentId);
+    const containedEdges = parentOutgoing.filter((e) => e.type === EdgeType.Contains);
+    const collected: ActivityInfo[] = [];
 
-    const activityType = getActivityType(activityNode);
+    for (const containsEdge of containedEdges) {
+      const activityNode = graph.getNode(containsEdge.to);
+      if (!activityNode || activityNode.type !== NodeType.Activity) continue;
 
-    // dependsOn: outgoing depends_on edges from this activity
-    const actOutgoing = graph.getOutgoing(activityNode.id);
-    const dependsOn = actOutgoing
-      .filter((e) => e.type === EdgeType.DependsOn)
-      .map((e) => {
-        const depNode = graph.getNode(e.to);
-        return depNode ? depNode.name : e.to.slice(e.to.lastIndexOf("/") + 1);
-      });
+      const activityType = getActivityType(activityNode);
 
-    const activityInfo: ActivityInfo = {
-      name: activityNode.name,
-      activityType,
-      dependsOn,
-    };
+      const actOutgoing = graph.getOutgoing(activityNode.id);
+      const dependsOn = actOutgoing
+        .filter((e) => e.type === EdgeType.DependsOn)
+        .map((e) => {
+          const depNode = graph.getNode(e.to);
+          return depNode ? depNode.name : e.to.slice(e.to.lastIndexOf("/") + 1);
+        });
 
-    if (depth === "full") {
-      // Sources: tables and datasets read by this activity
-      const sources = actOutgoing
-        .filter((e) => e.type === EdgeType.ReadsFrom || (e.type === EdgeType.UsesDataset && e.to.startsWith("dataset:")))
-        .map((e) => e.to);
+      const activityInfo: ActivityInfo = {
+        name: activityNode.name,
+        activityType,
+        dependsOn,
+      };
 
-      // Sinks: tables, DV entities, datasets written by this activity
-      const sinks = actOutgoing
-        .filter((e) => e.type === EdgeType.WritesTo)
-        .map((e) => e.to);
+      if (parentName) {
+        activityInfo.parentActivity = parentName;
+      }
 
-      // Column mappings: self-edges with MapsColumn
-      const colMappings = actOutgoing
-        .filter((e) => e.type === EdgeType.MapsColumn)
-        .map((e) => ({
-          sourceColumn: (e.metadata.sourceColumn as string | null) ?? null,
-          sinkColumn: (e.metadata.sinkColumn as string | null) ?? null,
-        }));
+      if (effectiveDepth === "full") {
+        const sources = actOutgoing
+          .filter((e) => e.type === EdgeType.ReadsFrom || (e.type === EdgeType.UsesDataset && e.to.startsWith("dataset:")))
+          .map((e) => e.to);
 
-      activityInfo.sources = sources;
-      activityInfo.sinks = sinks;
-      activityInfo.columnMappings = colMappings;
-      const meta = getActivityMetadata(activityNode);
-      if (meta.sqlQuery) activityInfo.sqlQuery = meta.sqlQuery;
-      if (meta.fetchXmlQuery) activityInfo.fetchXmlQuery = meta.fetchXmlQuery;
-      if (meta.storedProcedureName) activityInfo.storedProcedureName = meta.storedProcedureName;
-      if (meta.storedProcedureParameters) activityInfo.storedProcedureParameters = meta.storedProcedureParameters;
-      if (meta.pipelineParameters) activityInfo.pipelineParameters = meta.pipelineParameters;
+        const sinks = actOutgoing
+          .filter((e) => e.type === EdgeType.WritesTo)
+          .map((e) => e.to);
+
+        const colMappings = actOutgoing
+          .filter((e) => e.type === EdgeType.MapsColumn)
+          .map((e) => ({
+            sourceColumn: (e.metadata.sourceColumn as string | null) ?? null,
+            sinkColumn: (e.metadata.sinkColumn as string | null) ?? null,
+          }));
+
+        activityInfo.sources = sources;
+        activityInfo.sinks = sinks;
+        activityInfo.columnMappings = colMappings;
+        const meta = getActivityMetadata(activityNode);
+        if (meta.sqlQuery) activityInfo.sqlQuery = meta.sqlQuery;
+        if (meta.fetchXmlQuery) activityInfo.fetchXmlQuery = meta.fetchXmlQuery;
+        if (meta.storedProcedureName) activityInfo.storedProcedureName = meta.storedProcedureName;
+        if (meta.storedProcedureParameters) activityInfo.storedProcedureParameters = meta.storedProcedureParameters;
+        if (meta.pipelineParameters) activityInfo.pipelineParameters = meta.pipelineParameters;
+      }
+
+      collected.push(activityInfo);
+
+      // Recurse into container activities
+      const innerActivities = collectActivities(activityNode.id, activityNode.name);
+      collected.push(...innerActivities);
     }
 
-    activities.push(activityInfo);
+    return collected;
   }
 
-  result.activities = activities;
+  const activities = collectActivities(pipelineId);
+
+  if (activity) {
+    const filtered = activities.filter((a) => a.name === activity);
+    if (filtered.length === 0) {
+      result.error = `Activity '${activity}' not found in pipeline '${pipeline}'`;
+      result.activities = [];
+      return result;
+    }
+    result.activities = filtered;
+  } else {
+    result.activities = activities;
+  }
+
   return result;
 }

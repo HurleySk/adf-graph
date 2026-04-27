@@ -3,6 +3,8 @@ import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 export interface ActivityContext {
   pipelineId: string;
   pipelineName: string;
+  containerPrefix?: string;
+  containerId?: string;
 }
 
 export interface ActivityParseResult {
@@ -22,7 +24,8 @@ export function parseBaseActivity(
 ): ActivityParseResult {
   const activityName = activity.name as string;
   const activityType = activity.type as string;
-  const activityId = `${NodeType.Activity}:${context.pipelineName}/${activityName}`;
+  const prefix = context.containerPrefix ?? "";
+  const activityId = `${NodeType.Activity}:${context.pipelineName}/${prefix}${activityName}`;
 
   const node: GraphNode = {
     id: activityId,
@@ -33,9 +36,9 @@ export function parseBaseActivity(
 
   const edges: GraphEdge[] = [];
 
-  // Pipeline -> Activity (contains)
+  // Parent -> Activity (contains)
   edges.push({
-    from: context.pipelineId,
+    from: context.containerId ?? context.pipelineId,
     to: activityId,
     type: EdgeType.Contains,
     metadata: {},
@@ -46,7 +49,7 @@ export function parseBaseActivity(
   for (const dep of dependsOn) {
     const d = dep as Record<string, unknown>;
     const depName = d.activity as string;
-    const depId = `${NodeType.Activity}:${context.pipelineName}/${depName}`;
+    const depId = `${NodeType.Activity}:${context.pipelineName}/${prefix}${depName}`;
     edges.push({
       from: activityId,
       to: depId,

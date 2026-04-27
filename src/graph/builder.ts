@@ -73,27 +73,51 @@ function processJsonDirectory(
   }
 }
 
-/**
- * Post-process callback for pipeline files: extracts column mappings for Copy
- * activities and adds them to the graph.
- */
-function extractPipelineColumnMappings(_filePath: string, json: unknown, graph: Graph): void {
-  const root = json as Record<string, unknown>;
-  const pipelineName = root.name as string;
-  const properties = root.properties as Record<string, unknown> | undefined;
-  const activities = (properties?.activities as unknown[]) ?? [];
+const CONTAINER_ACTIVITY_PROPS: Record<string, string[]> = {
+  Until: ["activities"],
+  ForEach: ["activities"],
+  IfCondition: ["ifTrueActivities", "ifFalseActivities"],
+};
+
+function extractColumnMappingsRecursive(
+  activities: unknown[],
+  pipelineName: string,
+  prefix: string,
+  graph: Graph,
+): void {
   for (const act of activities) {
     const activity = act as Record<string, unknown>;
     const activityName = activity.name as string;
     const activityType = activity.type as string;
+    const fullPrefix = `${prefix}${activityName}`;
+
     if (activityType === "Copy") {
-      const activityId = `activity:${pipelineName}/${activityName}`;
+      const activityId = `activity:${pipelineName}/${fullPrefix}`;
       const colEdges = extractColumnMappings(activityId, activity);
       for (const edge of colEdges) {
         graph.addEdge(edge);
       }
     }
+
+    const containerProps = CONTAINER_ACTIVITY_PROPS[activityType];
+    if (containerProps) {
+      const typeProperties = activity.typeProperties as Record<string, unknown> | undefined;
+      if (typeProperties) {
+        for (const key of containerProps) {
+          const innerActivities = (typeProperties[key] as unknown[]) ?? [];
+          extractColumnMappingsRecursive(innerActivities, pipelineName, `${fullPrefix}/`, graph);
+        }
+      }
+    }
   }
+}
+
+function extractPipelineColumnMappings(_filePath: string, json: unknown, graph: Graph): void {
+  const root = json as Record<string, unknown>;
+  const pipelineName = root.name as string;
+  const properties = root.properties as Record<string, unknown> | undefined;
+  const activities = (properties?.activities as unknown[]) ?? [];
+  extractColumnMappingsRecursive(activities, pipelineName, "", graph);
 }
 
 

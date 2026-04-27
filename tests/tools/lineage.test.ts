@@ -46,6 +46,20 @@ describe("handleDataLineage", () => {
     expect(full.truncated).toBeUndefined();
   });
 
+  it("includes SP column mappings with table metadata and transform expression", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDataLineage(graph, "dbo.Org_Staging", "org_type_code", "upstream");
+    const spMappings = result.columnMappings.filter((m) =>
+      m.activityId.startsWith("stored_procedure:"),
+    );
+    expect(spMappings.length).toBeGreaterThan(0);
+    const mapping = spMappings.find((m) => m.sourceColumn === "org_type_code");
+    expect(mapping).toBeDefined();
+    expect(mapping!.sourceTable).toBe("dbo.Org_Staging");
+    expect(mapping!.targetTable).toBe("dbo.Org_Staging");
+    expect(mapping!.transformExpression).toContain("UPPER");
+  });
+
   it("returns empty paths for an unknown entity", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDataLineage(graph, "nonexistent_entity", undefined, "upstream");

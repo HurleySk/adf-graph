@@ -11,9 +11,8 @@ describe("handleFindConsumers", () => {
     const result = handleFindConsumers(graph, "alm_organization", "dataverse_entity");
     expect(result.nodeId).toBe("dataverse_entity:alm_organization");
     expect(result.consumers.length).toBeGreaterThan(0);
-    const writer = result.consumers.find((c) => c.usage === "writes");
+    const writer = result.consumers.find((c) => c.usage === "writes" && c.pipeline === "Copy_To_Dataverse");
     expect(writer).toBeDefined();
-    expect(writer!.pipeline).toBe("Copy_To_Dataverse");
   });
 
   it("finds activities that use a dataset", () => {
@@ -29,9 +28,8 @@ describe("handleFindConsumers", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleFindConsumers(graph, "dbo.p_Transform_Org", "stored_procedure");
     expect(result.consumers.length).toBeGreaterThan(0);
-    const caller = result.consumers.find((c) => c.usage === "calls");
+    const caller = result.consumers.find((c) => c.usage === "calls" && c.pipeline === "SP_Transform");
     expect(caller).toBeDefined();
-    expect(caller!.pipeline).toBe("SP_Transform");
   });
 
   it("returns empty consumers for an unknown target", () => {

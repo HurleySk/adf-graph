@@ -40,9 +40,8 @@ describe("handleSearchQueries", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleSearchQueries(graph, "p_Transform_Org");
     expect(result.matches.length).toBeGreaterThanOrEqual(1);
-    const spMatch = result.matches.find((m) => m.field === "storedProcedureName");
+    const spMatch = result.matches.find((m) => m.field === "storedProcedureName" && m.pipeline === "SP_Transform");
     expect(spMatch).toBeDefined();
-    expect(spMatch!.pipeline).toBe("SP_Transform");
   });
 
   it("finds activities by stored procedure parameter value", () => {

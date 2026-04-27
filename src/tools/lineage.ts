@@ -17,6 +17,9 @@ export interface ColumnMapping {
   activityId: string;
   sourceColumn: string | null;
   sinkColumn: string | null;
+  sourceTable?: string;
+  targetTable?: string;
+  transformExpression?: string;
 }
 
 export interface DataLineageResult {
@@ -250,11 +253,15 @@ export function handleDataLineage(
         const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
         const targetColumn = (edge.metadata.targetColumn as string | null) ?? null;
         if (sourceColumn === attribute || targetColumn === attribute) {
-          columnMappings.push({
+          const mapping: ColumnMapping = {
             activityId: spId,
             sourceColumn,
             sinkColumn: targetColumn,
-          });
+          };
+          if (edge.metadata.sourceTable) mapping.sourceTable = edge.metadata.sourceTable as string;
+          if (edge.metadata.targetTable) mapping.targetTable = edge.metadata.targetTable as string;
+          if (edge.metadata.transformExpression) mapping.transformExpression = edge.metadata.transformExpression as string;
+          columnMappings.push(mapping);
         }
       }
     }

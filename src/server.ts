@@ -29,7 +29,7 @@ const manager = new GraphManager(config);
 
 const server = new McpServer({
   name: "adf-graph",
-  version: "0.7.0",
+  version: "0.8.0",
 });
 
 /** Shared optional environment parameter for all graph tools. */
@@ -78,18 +78,19 @@ server.tool(
 // Tool 3: graph_describe_pipeline
 server.tool(
   "graph_describe_pipeline",
-  "Describe a pipeline: summary, activities, or full detail including column mappings.",
+  "Describe a pipeline: summary, activities, or full detail including column mappings. Optionally filter to a single named activity.",
   {
     pipeline: z.string().describe("Pipeline name"),
     depth: z
       .enum(["summary", "activities", "full"])
       .default("summary")
       .describe("Level of detail to return"),
+    activity: z.string().optional().describe("Optional activity name — returns full detail for just that activity"),
     environment: environmentParam,
   },
-  async ({ pipeline, depth, environment }) => {
+  async ({ pipeline, depth, activity, environment }) => {
     const build = manager.ensureGraph(environment);
-    const result = handleDescribePipeline(build.graph, pipeline, depth);
+    const result = handleDescribePipeline(build.graph, pipeline, depth, activity);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );

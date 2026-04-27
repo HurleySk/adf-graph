@@ -139,6 +139,87 @@ describe("parsePipelineFile", () => {
     expect(uri).toBeDefined();
     expect(uri!.defaultValue).toBe("https://org.crm.dynamics.com");
   });
+
+  it("extracts inner activities from Until containers with nested IDs", () => {
+    const result = parsePipelineFile(loadFixture("container-activities.json"));
+    const innerCopy = result.nodes.find(
+      (n) => n.id === "activity:Pipeline_With_Containers/Batch Upsert Loop/Copy Batch",
+    );
+    expect(innerCopy).toBeDefined();
+    expect(innerCopy!.metadata.activityType).toBe("Copy");
+    expect(innerCopy!.metadata.sqlQuery).toContain("dbo.Org_Staging");
+  });
+
+  it("creates Contains edges from container to inner activities", () => {
+    const result = parsePipelineFile(loadFixture("container-activities.json"));
+    const containerContains = result.edges.filter(
+      (e) =>
+        e.type === "contains" &&
+        e.from === "activity:Pipeline_With_Containers/Batch Upsert Loop",
+    );
+    expect(containerContains.length).toBe(2);
+    expect(containerContains.map((e) => e.to)).toContain(
+      "activity:Pipeline_With_Containers/Batch Upsert Loop/Copy Batch",
+    );
+    expect(containerContains.map((e) => e.to)).toContain(
+      "activity:Pipeline_With_Containers/Batch Upsert Loop/Increment Offset",
+    );
+  });
+
+  it("extracts inner activities from IfCondition true and false branches", () => {
+    const result = parsePipelineFile(loadFixture("container-activities.json"));
+    const trueBranch = result.nodes.find(
+      (n) => n.id === "activity:Pipeline_With_Containers/Check Results/Run Transform SP",
+    );
+    const falseBranch = result.nodes.find(
+      (n) => n.id === "activity:Pipeline_With_Containers/Check Results/Log No Results",
+    );
+    expect(trueBranch).toBeDefined();
+    expect(trueBranch!.metadata.activityType).toBe("SqlServerStoredProcedure");
+    expect(falseBranch).toBeDefined();
+    expect(falseBranch!.metadata.activityType).toBe("Copy");
+  });
+
+  it("extracts inner activities from ForEach containers", () => {
+    const result = parsePipelineFile(loadFixture("container-activities.json"));
+    const innerCopy = result.nodes.find(
+      (n) => n.id === "activity:Pipeline_With_Containers/Process Each Region/Copy Region Data",
+    );
+    expect(innerCopy).toBeDefined();
+    expect(innerCopy!.metadata.sqlQuery).toContain("dbo.RegionData");
+  });
+
+  it("resolves DependsOn within container scope", () => {
+    const result = parsePipelineFile(loadFixture("container-activities.json"));
+    const depEdges = result.edges.filter(
+      (e) =>
+        e.type === "depends_on" &&
+        e.from === "activity:Pipeline_With_Containers/Batch Upsert Loop/Increment Offset",
+    );
+    expect(depEdges).toHaveLength(1);
+    expect(depEdges[0].to).toBe(
+      "activity:Pipeline_With_Containers/Batch Upsert Loop/Copy Batch",
+    );
+  });
+
+  it("extracts dataset edges from inner Copy activities", () => {
+    const result = parsePipelineFile(loadFixture("container-activities.json"));
+    const innerCopyId = "activity:Pipeline_With_Containers/Batch Upsert Loop/Copy Batch";
+    const datasetEdges = result.edges.filter(
+      (e) => e.type === "uses_dataset" && e.from === innerCopyId,
+    );
+    expect(datasetEdges.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("extracts SP call edges from inner SP activities", () => {
+    const result = parsePipelineFile(loadFixture("container-activities.json"));
+    const innerSpId = "activity:Pipeline_With_Containers/Check Results/Run Transform SP";
+    const spEdges = result.edges.filter(
+      (e) => e.type === "calls_sp" && e.from === innerSpId,
+    );
+    expect(spEdges).toHaveLength(1);
+    expect(spEdges[0].to).toBe("stored_procedure:dbo.p_Transform_Org");
+  });
 });
 
 describe("extractTablesFromSql", () => {

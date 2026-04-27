@@ -43,6 +43,9 @@ export function parsePipelineFile(json: unknown): ParseResult {
     const activity = act as Record<string, unknown>;
     const result = parseActivity(activity, { pipelineId, pipelineName });
     nodes.push(result.node);
+    if (result.innerNodes) {
+      nodes.push(...result.innerNodes);
+    }
     edges.push(...result.edges);
     warnings.push(...result.warnings);
   }

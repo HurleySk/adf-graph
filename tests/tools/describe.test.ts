@@ -86,6 +86,67 @@ describe("handleDescribePipeline", () => {
     expect(runCopy!.pipelineParameters!.dataverse_query).toContain("<fetch>");
   });
 
+  it("full depth: shows inner activities from Until containers with parentActivity", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Pipeline_With_Containers", "full");
+    expect(result.activities).toBeDefined();
+    const innerCopy = result.activities!.find((a) => a.name === "Copy Batch");
+    expect(innerCopy).toBeDefined();
+    expect(innerCopy!.parentActivity).toBe("Batch Upsert Loop");
+    expect(innerCopy!.sqlQuery).toContain("dbo.Org_Staging");
+    expect(innerCopy!.columnMappings).toBeDefined();
+    expect(innerCopy!.columnMappings!.length).toBe(2);
+  });
+
+  it("full depth: shows inner activities from IfCondition branches", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Pipeline_With_Containers", "full");
+    const sp = result.activities!.find((a) => a.name === "Run Transform SP");
+    expect(sp).toBeDefined();
+    expect(sp!.parentActivity).toBe("Check Results");
+    expect(sp!.storedProcedureName).toBe("dbo.p_Transform_Org");
+
+    const falseCopy = result.activities!.find((a) => a.name === "Log No Results");
+    expect(falseCopy).toBeDefined();
+    expect(falseCopy!.parentActivity).toBe("Check Results");
+  });
+
+  it("full depth: shows inner activities from ForEach containers", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Pipeline_With_Containers", "full");
+    const regionCopy = result.activities!.find((a) => a.name === "Copy Region Data");
+    expect(regionCopy).toBeDefined();
+    expect(regionCopy!.parentActivity).toBe("Process Each Region");
+    expect(regionCopy!.sqlQuery).toContain("dbo.RegionData");
+  });
+
+  it("activity filter: returns only the named activity with full detail", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Copy_To_Dataverse", "summary", "Upsert Organizations");
+    expect(result.activities).toBeDefined();
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities![0].name).toBe("Upsert Organizations");
+    expect(result.activities![0].sources).toBeDefined();
+    expect(result.activities![0].columnMappings).toBeDefined();
+  });
+
+  it("activity filter: returns inner activity by name", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Pipeline_With_Containers", "summary", "Copy Batch");
+    expect(result.activities).toBeDefined();
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities![0].name).toBe("Copy Batch");
+    expect(result.activities![0].parentActivity).toBe("Batch Upsert Loop");
+    expect(result.activities![0].sqlQuery).toContain("dbo.Org_Staging");
+  });
+
+  it("activity filter: returns error for unknown activity", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Copy_To_Dataverse", "summary", "NonExistentActivity");
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain("NonExistentActivity");
+  });
+
   it("returns error for unknown pipeline", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDescribePipeline(graph, "NonExistentPipeline", "summary");

@@ -1,0 +1,182 @@
+{
+  "name": "Pipeline_With_Containers",
+  "properties": {
+    "parameters": {},
+    "activities": [
+      {
+        "name": "Batch Upsert Loop",
+        "type": "Until",
+        "dependsOn": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(activity('Batch Upsert Loop').output.rowsCopied, 0)",
+            "type": "Expression"
+          },
+          "timeout": "7.00:00:00",
+          "activities": [
+            {
+              "name": "Copy Batch",
+              "type": "Copy",
+              "dependsOn": [],
+              "typeProperties": {
+                "source": {
+                  "type": "AzureSqlSource",
+                  "sqlReaderQuery": "SELECT org_id, org_name FROM dbo.Org_Staging ORDER BY org_id OFFSET @{activity('Set Offset').output.value} ROWS FETCH NEXT 1000 ROWS ONLY"
+                },
+                "sink": {
+                  "type": "CommonDataServiceForAppsSink",
+                  "writeBehavior": "upsert",
+                  "alternateKeyName": "alm_orgid_key"
+                },
+                "translator": {
+                  "type": "TabularTranslator",
+                  "mappings": [
+                    {
+                      "source": { "name": "org_id" },
+                      "sink": { "name": "alm_orgid" }
+                    },
+                    {
+                      "source": { "name": "org_name" },
+                      "sink": { "name": "alm_name" }
+                    }
+                  ]
+                }
+              },
+              "inputs": [
+                {
+                  "referenceName": "ds_sql_staging",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "schema_name": "dbo",
+                    "table_name": "Org_Staging"
+                  }
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "ds_dataverse",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "entity_name": "alm_organization"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Increment Offset",
+              "type": "SetVariable",
+              "dependsOn": [
+                { "activity": "Copy Batch", "dependencyConditions": ["Succeeded"] }
+              ],
+              "typeProperties": {
+                "variableName": "offset",
+                "value": "@add(int(variables('offset')), 1000)"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Check Results",
+        "type": "IfCondition",
+        "dependsOn": [
+          { "activity": "Batch Upsert Loop", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(activity('Batch Upsert Loop').output.iterationCount, 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Run Transform SP",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [],
+              "typeProperties": {
+                "storedProcedureName": "dbo.p_Transform_Org",
+                "storedProcedureParameters": {
+                  "batch_id": { "value": "@pipeline().RunId", "type": "String" }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "Log No Results",
+              "type": "Copy",
+              "dependsOn": [],
+              "typeProperties": {
+                "source": {
+                  "type": "AzureSqlSource",
+                  "sqlReaderQuery": "SELECT 'No results' AS message"
+                },
+                "sink": {
+                  "type": "AzureSqlSink"
+                }
+              },
+              "inputs": [
+                {
+                  "referenceName": "ds_sql_source",
+                  "type": "DatasetReference"
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "ds_sql_staging",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "schema_name": "dbo",
+                    "table_name": "AuditLog"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "Process Each Region",
+        "type": "ForEach",
+        "dependsOn": [
+          { "activity": "Check Results", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "items": { "value": "@pipeline().parameters.regions", "type": "Expression" },
+          "activities": [
+            {
+              "name": "Copy Region Data",
+              "type": "Copy",
+              "dependsOn": [],
+              "typeProperties": {
+                "source": {
+                  "type": "AzureSqlSource",
+                  "sqlReaderQuery": "SELECT * FROM dbo.RegionData WHERE region = @item()"
+                },
+                "sink": {
+                  "type": "AzureSqlSink"
+                }
+              },
+              "inputs": [
+                {
+                  "referenceName": "ds_sql_source",
+                  "type": "DatasetReference"
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "ds_sql_staging",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "schema_name": "dbo",
+                    "table_name": "RegionStaging"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": []
+  }
+}
