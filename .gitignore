@@ -4,3 +4,4 @@ dist/
 .npmrc
 adf-graph.json
 tests/.tmp-config/
+.worktrees/
