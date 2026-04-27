@@ -99,5 +99,8 @@ describe("buildGraph", () => {
     const lsNode = graph.getNode("linked_service:ls_azure_sql");
     expect(lsNode).toBeDefined();
     expect(lsNode!.metadata.stub).toBeUndefined();
+    const secretNode = graph.getNode("key_vault_secret:ALM-ONPREM-SQL-CONNECTION-PROD");
+    expect(secretNode).toBeDefined();
+    expect(secretNode!.metadata.stub).toBeUndefined();
   });
 });
