@@ -4,6 +4,7 @@ import { Graph, GraphNode, NodeType } from "./model.js";
 import { ParseResult, parsePipelineFile } from "../parsers/pipeline.js";
 import { extractColumnMappings } from "../parsers/columns.js";
 import { parseDatasetFile } from "../parsers/dataset.js";
+import { parseLinkedServiceFile } from "../parsers/linkedService.js";
 import { scanSqlDirectory } from "../parsers/sql.js";
 
 export interface BuildResult {
@@ -29,7 +30,7 @@ function merge(graph: Graph, result: ParseResult): void {
 
 /**
  * Infer NodeType from an ID prefix (e.g., "pipeline:Foo" → NodeType.Pipeline).
- * Returns null for unknown prefixes (e.g., "linked_service:") — caller should skip.
+ * Returns null for unknown prefixes — caller should skip.
  */
 function inferNodeType(id: string): NodeType | null {
   const prefix = id.split(":")[0];
@@ -46,6 +47,10 @@ function inferNodeType(id: string): NodeType | null {
       return NodeType.Table;
     case "dataverse_entity":
       return NodeType.DataverseEntity;
+    case "linked_service":
+      return NodeType.LinkedService;
+    case "key_vault_secret":
+      return NodeType.KeyVaultSecret;
     default:
       return null;
   }
@@ -54,10 +59,11 @@ function inferNodeType(id: string): NodeType | null {
 /**
  * Build a dependency graph from an ADF artifact root directory.
  *
- * Pass 1 — Pipelines:  reads pipeline/*.json
- * Pass 2 — Datasets:   reads dataset/*.json
- * Pass 3 — SQL:        scans each subdirectory under "SQL DB/"
- * Pass 4 — Stubs:      creates stub nodes for any referenced IDs with no node
+ * Pass 1 — Pipelines:        reads pipeline/*.json
+ * Pass 2 — Datasets:         reads dataset/*.json
+ * Pass 3 — Linked Services:  reads linkedService/*.json
+ * Pass 4 — SQL:              scans each subdirectory under "SQL DB/"
+ * Pass 5 — Stubs:            creates stub nodes for any referenced IDs with no node
  */
 export function buildGraph(rootPath: string): BuildResult {
   const start = Date.now();
@@ -128,7 +134,30 @@ export function buildGraph(rootPath: string): BuildResult {
     }
   }
 
-  // ── Pass 3: SQL ───────────────────────────────────────────────────────────
+  // ── Pass 3: Linked Services ───────────────────────────────────────────────
+  const linkedServiceDir = join(rootPath, "linkedService");
+  if (existsSync(linkedServiceDir)) {
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(linkedServiceDir);
+    } catch (err) {
+      warnings.push(`Failed to read linkedService dir: ${String(err)}`);
+    }
+    for (const entry of entries) {
+      if (extname(entry).toLowerCase() !== ".json") continue;
+      const filePath = join(linkedServiceDir, entry);
+      try {
+        const json = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
+        const result = parseLinkedServiceFile(json);
+        warnings.push(...result.warnings);
+        merge(graph, result);
+      } catch (err) {
+        warnings.push(`Failed to parse linked service file '${entry}': ${String(err)}`);
+      }
+    }
+  }
+
+  // ── Pass 4: SQL ───────────────────────────────────────────────────────────
   const sqlBaseDir = join(rootPath, "SQL DB");
   if (existsSync(sqlBaseDir)) {
     let projects: string[] = [];
@@ -155,12 +184,12 @@ export function buildGraph(rootPath: string): BuildResult {
     }
   }
 
-  // ── Pass 4: Stub nodes ────────────────────────────────────────────────────
+  // ── Pass 5: Stub nodes ────────────────────────────────────────────────────
   const referencedIds = graph.getAllReferencedIds();
   for (const id of referencedIds) {
     if (!graph.getNode(id)) {
       const nodeType = inferNodeType(id);
-      if (!nodeType) continue; // skip unknown prefixes (e.g., linked_service:)
+      if (!nodeType) continue; // skip unknown prefixes
       const name = id.includes(":") ? id.slice(id.indexOf(":") + 1) : id;
       const stub: GraphNode = {
         id,

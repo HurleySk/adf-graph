@@ -69,4 +69,35 @@ describe("buildGraph", () => {
     const { warnings } = buildGraph(fixtureRoot);
     expect(Array.isArray(warnings)).toBe(true);
   });
+
+  it("creates LinkedService nodes from linkedService/ directory", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const lsNodes = graph.getNodesByType(NodeType.LinkedService);
+    expect(lsNodes.length).toBeGreaterThanOrEqual(2);
+    const names = lsNodes.map((n) => n.name);
+    expect(names).toContain("ls_azure_sql");
+    expect(names).toContain("ls_key_vault");
+  });
+
+  it("creates KeyVaultSecret nodes from linked service key vault references", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const secrets = graph.getNodesByType(NodeType.KeyVaultSecret);
+    expect(secrets.length).toBeGreaterThanOrEqual(1);
+    expect(secrets.map((n) => n.name)).toContain("ALM-ONPREM-SQL-CONNECTION-PROD");
+  });
+
+  it("creates ReferencesSecret edges from LS to KV secrets", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const edges = graph.getOutgoing("linked_service:ls_azure_sql");
+    const secretEdge = edges.find((e) => e.type === EdgeType.ReferencesSecret);
+    expect(secretEdge).toBeDefined();
+    expect(secretEdge!.to).toBe("key_vault_secret:ALM-ONPREM-SQL-CONNECTION-PROD");
+  });
+
+  it("does not create stub nodes for linked_service: and key_vault_secret: prefixes", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const lsNode = graph.getNode("linked_service:ls_azure_sql");
+    expect(lsNode).toBeDefined();
+    expect(lsNode!.metadata.stub).toBeUndefined();
+  });
 });
