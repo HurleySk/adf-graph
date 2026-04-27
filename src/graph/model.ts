@@ -5,6 +5,8 @@ export enum NodeType {
   StoredProcedure = "stored_procedure",
   Table = "table",
   DataverseEntity = "dataverse_entity",
+  LinkedService = "linked_service",
+  KeyVaultSecret = "key_vault_secret",
 }
 
 export enum EdgeType {
@@ -17,6 +19,7 @@ export enum EdgeType {
   UsesDataset = "uses_dataset",
   UsesLinkedService = "uses_linked_service",
   MapsColumn = "maps_column",
+  ReferencesSecret = "references_secret",
 }
 
 export interface GraphNode {

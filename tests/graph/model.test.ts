@@ -191,6 +191,16 @@ describe("Graph", () => {
     expect(g.getNode("pipeline:X")).toBeDefined();
   });
 
+  it("supports LinkedService and KeyVaultSecret node types", () => {
+    const graph = new Graph();
+    graph.addNode({ id: "linked_service:ls_sql", type: NodeType.LinkedService, name: "ls_sql", metadata: {} });
+    graph.addNode({ id: "key_vault_secret:ALM-SQL-CONN", type: NodeType.KeyVaultSecret, name: "ALM-SQL-CONN", metadata: {} });
+    graph.addEdge({ from: "linked_service:ls_sql", to: "key_vault_secret:ALM-SQL-CONN", type: EdgeType.ReferencesSecret, metadata: {} });
+    expect(graph.getNode("linked_service:ls_sql")?.type).toBe(NodeType.LinkedService);
+    expect(graph.getNode("key_vault_secret:ALM-SQL-CONN")?.type).toBe(NodeType.KeyVaultSecret);
+    expect(graph.getOutgoing("linked_service:ls_sql")[0].type).toBe(EdgeType.ReferencesSecret);
+  });
+
   it("removeEdgesForNode removes all outgoing and incoming edges for a node", () => {
     const g = new Graph();
     g.addNode({ id: "pipeline:A", type: NodeType.Pipeline, name: "A", metadata: {} });
