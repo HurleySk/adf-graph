@@ -1,4 +1,5 @@
-import { Graph, EdgeType, GraphEdge } from "../graph/model.js";
+import { Graph, GraphNode, NodeType, EdgeType, GraphEdge } from "../graph/model.js";
+import { parseNodeId } from "../utils/nodeId.js";
 
 export type LineageDirection = "upstream" | "downstream";
 
@@ -50,6 +51,44 @@ function pathToSteps(graph: Graph, path: GraphEdge[], direction: LineageDirectio
   });
 }
 
+function resolveEntityNode(
+  graph: Graph,
+  entity: string,
+): { nodeId: string; node: GraphNode; error: null } | { nodeId: null; node: null; error: string } {
+  if (entity.includes(":")) {
+    const { type } = parseNodeId(entity);
+    if (type === "table" || type === "dataverse_entity") {
+      const directNode = graph.getNode(entity);
+      if (directNode) return { nodeId: entity, node: directNode, error: null };
+    }
+  }
+
+  const dvId = `dataverse_entity:${entity}`;
+  const dvNode = graph.getNode(dvId);
+  if (dvNode) return { nodeId: dvId, node: dvNode, error: null };
+
+  const tableId = `table:${entity}`;
+  const tableNode = graph.getNode(tableId);
+  if (tableNode) return { nodeId: tableId, node: tableNode, error: null };
+
+  const lowerEntity = entity.toLowerCase();
+  const candidates: GraphNode[] = [];
+  for (const n of graph.getNodesByType(NodeType.Table)) {
+    if (n.name.toLowerCase() === lowerEntity) candidates.push(n);
+  }
+  for (const n of graph.getNodesByType(NodeType.DataverseEntity)) {
+    if (n.name.toLowerCase() === lowerEntity) candidates.push(n);
+  }
+
+  if (candidates.length === 1) return { nodeId: candidates[0].id, node: candidates[0], error: null };
+  if (candidates.length > 1) {
+    const ids = candidates.map((c) => c.id).join(", ");
+    return { nodeId: null, node: null, error: `Ambiguous entity '${entity}' — matches multiple nodes: ${ids}` };
+  }
+
+  return { nodeId: null, node: null, error: `Node for '${entity}' not found as dataverse_entity or table` };
+}
+
 /**
  * Trace data lineage for a Dataverse entity or table using data-flow semantics:
  *
@@ -69,23 +108,19 @@ export function handleDataLineage(
   direction: LineageDirection = "upstream",
   maxDepth?: number,
 ): DataLineageResult {
-  // Resolve node ID: try dataverse_entity first, then table
-  let nodeId = `dataverse_entity:${entity}`;
-  if (!graph.getNode(nodeId)) {
-    nodeId = `table:${entity}`;
-  }
-
-  const node = graph.getNode(nodeId);
-  if (!node) {
+  const resolved = resolveEntityNode(graph, entity);
+  if (!resolved.nodeId) {
     return {
       entity,
       attribute,
       direction,
       paths: [],
       columnMappings: [],
-      error: `Node for '${entity}' not found as dataverse_entity or table`,
+      error: resolved.error ?? undefined,
     };
   }
+
+  const nodeId: string = resolved.nodeId;
 
   const paths: LineagePath[] = [];
   const visitedNodes = new Set<string>();

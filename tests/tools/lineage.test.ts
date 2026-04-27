@@ -60,6 +60,30 @@ describe("handleDataLineage", () => {
     expect(mapping!.transformExpression).toContain("UPPER");
   });
 
+  it("resolves a bare table name without schema prefix", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDataLineage(graph, "Org_Staging", undefined, "downstream");
+    expect(result.error).toBeUndefined();
+    expect(result.entity).toBe("Org_Staging");
+    const nodeIds = result.paths.flatMap((p) => p.steps.map((s) => s.nodeId));
+    expect(nodeIds.some((id) => id.startsWith("dataverse_entity:"))).toBe(true);
+  });
+
+  it("resolves a full node ID with type prefix", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDataLineage(graph, "table:dbo.Org_Staging", undefined, "downstream");
+    expect(result.error).toBeUndefined();
+    const nodeIds = result.paths.flatMap((p) => p.steps.map((s) => s.nodeId));
+    expect(nodeIds.some((id) => id.startsWith("dataverse_entity:"))).toBe(true);
+  });
+
+  it("resolves table name case-insensitively", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDataLineage(graph, "org_staging", undefined, "downstream");
+    expect(result.error).toBeUndefined();
+    expect(result.paths.length).toBeGreaterThan(0);
+  });
+
   it("returns empty paths for an unknown entity", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDataLineage(graph, "nonexistent_entity", undefined, "upstream");

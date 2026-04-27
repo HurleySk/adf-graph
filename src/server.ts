@@ -122,7 +122,7 @@ server.tool(
   "graph_data_lineage",
   "Trace data lineage for a Dataverse entity or staging table. Optionally filter to a single attribute/column.",
   {
-    entity: z.string().describe("Entity or table name (e.g. 'businessunit')"),
+    entity: z.string().describe("Entity or table name. Accepts bare name ('Org_Staging'), schema-qualified ('dbo.Org_Staging'), full node ID ('table:dbo.Org_Staging'), or Dataverse entity ('businessunit'). Case-insensitive."),
     attribute: z
       .string()
       .optional()
