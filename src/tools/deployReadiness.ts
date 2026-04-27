@@ -23,6 +23,7 @@ export interface DeployReadinessResult {
     tables: DependencyStatus[];
     storedProcedures: DependencyStatus[];
     dataverseEntities: DependencyStatus[];
+    keyVaultSecrets: DependencyStatus[];
   };
   parameterIssues: ParameterIssue[];
   warnings: string[];
@@ -37,7 +38,7 @@ export function handleDeployReadiness(graph: Graph, pipeline: string): DeployRea
     return {
       pipeline,
       ready: false,
-      dependencies: { pipelines: [], datasets: [], linkedServices: [], tables: [], storedProcedures: [], dataverseEntities: [] },
+      dependencies: { pipelines: [], datasets: [], linkedServices: [], tables: [], storedProcedures: [], dataverseEntities: [], keyVaultSecrets: [] },
       parameterIssues: [],
       warnings: [],
       error: `Pipeline '${pipeline}' not found`,
@@ -154,6 +155,7 @@ function categorizeDeps(
     tables: [],
     storedProcedures: [],
     dataverseEntities: [],
+    keyVaultSecrets: [],
   };
 
   for (const [id, { referencedBy }] of deps) {
@@ -172,6 +174,7 @@ function categorizeDeps(
       case "table": result.tables.push(entry); break;
       case "stored_procedure": result.storedProcedures.push(entry); break;
       case "dataverse_entity": result.dataverseEntities.push(entry); break;
+      case "key_vault_secret": result.keyVaultSecrets.push(entry); break;
     }
   }
 

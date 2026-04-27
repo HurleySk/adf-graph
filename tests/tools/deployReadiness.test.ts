@@ -54,6 +54,13 @@ describe("handleDeployReadiness", () => {
     expect(uriIssue).toBeUndefined();
   });
 
+  it("includes keyVaultSecrets category in dependencies", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDeployReadiness(graph, "Test_Orchestrator");
+    expect(result.dependencies).toHaveProperty("keyVaultSecrets");
+    expect(Array.isArray(result.dependencies.keyVaultSecrets)).toBe(true);
+  });
+
   it("reports stored procedures in dependencies", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDeployReadiness(graph, "Test_Orchestrator");

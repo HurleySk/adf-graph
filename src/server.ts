@@ -60,7 +60,7 @@ server.tool(
   {
     target: z.string().describe("Name of the target artifact (e.g. 'businessunit')"),
     target_type: z
-      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity"])
+      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity", "linked_service", "key_vault_secret"])
       .describe("Node type of the target"),
     environment: environmentParam,
   },
@@ -97,7 +97,7 @@ server.tool(
   {
     target: z.string().describe("Name of the artifact to analyse"),
     target_type: z
-      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity"])
+      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity", "linked_service", "key_vault_secret"])
       .describe("Node type of the target"),
     direction: z
       .enum(["upstream", "downstream", "both"])
@@ -231,7 +231,7 @@ server.tool(
   },
 );
 
-// Tool 8: graph_add_overlay
+// Tool 12: graph_add_overlay
 server.tool(
   "graph_add_overlay",
   "Add an overlay path (directory or file) to an environment. The overlay's artifacts are merged on top of the base graph in a separate merged view. Runtime overlays are ephemeral (lost on restart).",
@@ -245,7 +245,7 @@ server.tool(
   },
 );
 
-// Tool 9: graph_remove_overlay
+// Tool 13: graph_remove_overlay
 server.tool(
   "graph_remove_overlay",
   "Remove a runtime overlay from an environment. Config-based overlays cannot be removed via this tool.",
@@ -259,7 +259,7 @@ server.tool(
   },
 );
 
-// Tool 10: graph_list_overlays
+// Tool 14: graph_list_overlays
 server.tool(
   "graph_list_overlays",
   "List all overlays (config-based and runtime) for an environment.",
@@ -272,7 +272,7 @@ server.tool(
   },
 );
 
-// Tool 11: graph_add_environment
+// Tool 15: graph_add_environment
 server.tool(
   "graph_add_environment",
   "Register a new ephemeral environment pointing to an ADF artifact directory. Lost on server restart. Cannot collide with config-based environment names.",
@@ -290,7 +290,7 @@ server.tool(
   },
 );
 
-// Tool 12: graph_remove_environment
+// Tool 16: graph_remove_environment
 server.tool(
   "graph_remove_environment",
   "Remove a runtime environment. Config-based environments cannot be removed via this tool.",
