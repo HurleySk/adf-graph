@@ -21,7 +21,11 @@
             "referenceName": "Copy_To_Staging",
             "type": "PipelineReference"
           },
-          "waitOnCompletion": true
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_query": "SELECT org_id, org_name FROM dbo.Work_Item_Milestone WHERE active = 1",
+            "source_object_name": "LegacyOrg"
+          }
         }
       },
       {

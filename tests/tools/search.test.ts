@@ -74,7 +74,7 @@ describe("handleSearchQueries", () => {
     expect(result.matches.length).toBeGreaterThan(0);
     for (const match of result.matches) {
       expect(match.snippet).toContain("SELECT org_id");
-      expect(match.field).toBe("sqlQuery");
+      expect(["sqlQuery", "pipelineParameters"]).toContain(match.field);
     }
   });
 });

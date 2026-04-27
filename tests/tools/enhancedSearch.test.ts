@@ -101,7 +101,7 @@ describe("handleEnhancedSearch", () => {
     });
     expect(result.totalHits).toBeGreaterThan(0);
     for (const hit of result.hits) {
-      expect(hit.field).toBe("sqlQuery");
+      expect(["sqlQuery", "pipelineParameters"]).toContain(hit.field);
     }
   });
 
