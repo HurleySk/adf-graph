@@ -1,6 +1,12 @@
 {
   "name": "Copy_To_Dataverse",
   "properties": {
+    "parameters": {
+      "dataverse_query": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
     "activities": [
       {
         "name": "Upsert Organizations",
@@ -18,9 +24,30 @@
           "translator": {
             "type": "TabularTranslator",
             "mappings": [
-              { "source": { "name": "org_id" }, "sink": { "name": "alm_orgid" } },
-              { "source": { "name": "org_name" }, "sink": { "name": "alm_name" } },
-              { "source": { "name": "org_type_code" }, "sink": { "name": "alm_orgtypecode" } }
+              {
+                "source": {
+                  "name": "org_id"
+                },
+                "sink": {
+                  "name": "alm_orgid"
+                }
+              },
+              {
+                "source": {
+                  "name": "org_name"
+                },
+                "sink": {
+                  "name": "alm_name"
+                }
+              },
+              {
+                "source": {
+                  "name": "org_type_code"
+                },
+                "sink": {
+                  "name": "alm_orgtypecode"
+                }
+              }
             ]
           }
         },
