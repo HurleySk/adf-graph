@@ -108,6 +108,8 @@ export function parsePipelineFile(json: unknown): ParseResult {
             type: EdgeType.Executes,
             metadata: {},
           });
+          const actNode = nodes.find(n => n.id === activityId)!;
+          actNode.metadata.executedPipeline = refName;
         }
       }
 

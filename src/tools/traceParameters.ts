@@ -119,7 +119,7 @@ function tracePipeline(
 function recurseIntoChildren(
   graph: Graph,
   pipelineId: string,
-  pipelineName: string,
+  parentName: string,
   flows: ParameterFlow[],
   deadEnds: DeadEndParameter[],
   warnings: string[],
@@ -128,18 +128,17 @@ function recurseIntoChildren(
   const containsEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Contains);
   const executesEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Executes);
 
-  // Build a list of ExecutePipeline activities with their params
   const execActivities = containsEdges
     .map((ce) => graph.getNode(ce.to))
     .filter((n): n is NonNullable<typeof n> => n !== undefined && n.metadata.activityType === "ExecutePipeline");
 
-  // Match each Executes edge to its activity by position (both ordered from pipeline JSON)
-  for (let i = 0; i < executesEdges.length; i++) {
-    const childPipelineId = executesEdges[i].to;
-    const actNode = i < execActivities.length ? execActivities[i] : undefined;
+  for (const execEdge of executesEdges) {
+    const childPipelineId = execEdge.to;
+    const childPipelineName = childPipelineId.split(":")[1];
+    const actNode = execActivities.find((a) => a.metadata.executedPipeline === childPipelineName);
     const childSupplied = actNode?.metadata.pipelineParameters as Record<string, unknown> | undefined;
     const actName = actNode?.name ?? "ExecutePipeline";
 
-    tracePipeline(graph, childPipelineId, pipelineName, actName, childSupplied ?? null, flows, deadEnds, warnings, visited);
+    tracePipeline(graph, childPipelineId, parentName, actName, childSupplied ?? null, flows, deadEnds, warnings, visited);
   }
 }

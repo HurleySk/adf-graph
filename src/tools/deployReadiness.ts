@@ -131,29 +131,15 @@ function checkParameters(
   const containsEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Contains);
   const executesEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Executes);
 
-  // Build a map from child pipeline id to the parameters passed by the ExecutePipeline activity.
-  // Match each Executes edge to the activity that supplies its parameters by looking at
-  // which activities have pipelineParameters — correlate by edge order since both lists
-  // are built from the same pipeline JSON activities array.
-  const childParamMap = new Map<string, Record<string, unknown>>();
   const execActivities = containsEdges
     .map((ce) => graph.getNode(ce.to))
-    .filter((n) => n && n.metadata.activityType === "ExecutePipeline");
-  for (const actNode of execActivities) {
-    if (!actNode || !actNode.metadata.pipelineParameters) continue;
-    // Find the Executes edge for this activity's target child pipeline
-    // The activity name often contains the child pipeline name, but we can't rely on that.
-    // Instead, match by position: both execActivities and executesEdges are ordered by
-    // their appearance in the pipeline JSON.
-    const actIndex = execActivities.indexOf(actNode);
-    if (actIndex >= 0 && actIndex < executesEdges.length) {
-      childParamMap.set(executesEdges[actIndex].to, actNode.metadata.pipelineParameters as Record<string, unknown>);
-    }
-  }
+    .filter((n): n is NonNullable<typeof n> => n !== undefined && n.metadata.activityType === "ExecutePipeline");
 
   for (const execEdge of executesEdges) {
-    const childParams = childParamMap.get(execEdge.to) ?? null;
-    checkParameters(graph, execEdge.to, childParams, issues, visited);
+    const childPipelineName = execEdge.to.split(":")[1];
+    const actNode = execActivities.find((a) => a.metadata.executedPipeline === childPipelineName);
+    const childParams = actNode?.metadata.pipelineParameters as Record<string, unknown> | undefined;
+    checkParameters(graph, execEdge.to, childParams ?? null, issues, visited);
   }
 }
 
