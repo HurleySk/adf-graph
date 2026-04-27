@@ -5,6 +5,7 @@ import { ADF_DIRS } from "../constants.js";
 import { inferNodeType, parseNodeId } from "../utils/nodeId.js";
 import { ParseResult, parsePipelineFile } from "../parsers/pipeline.js";
 import { extractColumnMappings } from "../parsers/columns.js";
+import { CONTAINER_TYPES } from "../parsers/activities/container.js";
 import { parseDatasetFile } from "../parsers/dataset.js";
 import { parseLinkedServiceFile } from "../parsers/linkedService.js";
 import { scanSqlDirectory } from "../parsers/sql.js";
@@ -73,12 +74,6 @@ function processJsonDirectory(
   }
 }
 
-const CONTAINER_ACTIVITY_PROPS: Record<string, string[]> = {
-  Until: ["activities"],
-  ForEach: ["activities"],
-  IfCondition: ["ifTrueActivities", "ifFalseActivities"],
-};
-
 function extractColumnMappingsRecursive(
   activities: unknown[],
   pipelineName: string,
@@ -99,7 +94,7 @@ function extractColumnMappingsRecursive(
       }
     }
 
-    const containerProps = CONTAINER_ACTIVITY_PROPS[activityType];
+    const containerProps = CONTAINER_TYPES[activityType];
     if (containerProps) {
       const typeProperties = activity.typeProperties as Record<string, unknown> | undefined;
       if (typeProperties) {

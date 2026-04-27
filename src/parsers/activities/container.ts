@@ -12,7 +12,7 @@ type ParseActivityFn = (
   context: ActivityContext,
 ) => { node: GraphNode; innerNodes?: GraphNode[]; edges: GraphEdge[]; warnings: string[] };
 
-const CONTAINER_TYPES: Record<string, string[]> = {
+export const CONTAINER_TYPES: Record<string, string[]> = {
   Until: ["activities"],
   ForEach: ["activities"],
   IfCondition: ["ifTrueActivities", "ifFalseActivities"],
