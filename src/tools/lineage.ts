@@ -1,4 +1,4 @@
-import { Graph, EdgeType, GraphEdge } from "../graph/model.js";
+import { Graph, EdgeType, GraphEdge, NodeType } from "../graph/model.js";
 
 export type LineageDirection = "upstream" | "downstream";
 
@@ -69,10 +69,31 @@ export function handleDataLineage(
   direction: LineageDirection = "upstream",
   maxDepth?: number,
 ): DataLineageResult {
-  // Resolve node ID: try dataverse_entity first, then table
+  // Resolve node ID: try dataverse_entity first, then table (exact), then dbo-prefixed, then scan
   let nodeId = `dataverse_entity:${entity}`;
   if (!graph.getNode(nodeId)) {
     nodeId = `table:${entity}`;
+  }
+  if (!graph.getNode(nodeId)) {
+    // Try with dbo schema prefix (most common)
+    nodeId = `table:dbo.${entity}`;
+  }
+  if (!graph.getNode(nodeId)) {
+    // Scan all table nodes for a case-insensitive name match (handles any schema)
+    const entityLower = entity.toLowerCase();
+    const tableNodes = graph.getNodesByType(NodeType.Table);
+    const match = tableNodes.find((n) => {
+      // Match against full id suffix (e.g., "dbo.Foo") or just the table name
+      const idSuffix = n.id.slice("table:".length);
+      if (idSuffix.toLowerCase() === entityLower) return true;
+      // Also match just the table name part (after the schema dot)
+      const dotIdx = idSuffix.indexOf(".");
+      if (dotIdx >= 0 && idSuffix.slice(dotIdx + 1).toLowerCase() === entityLower) return true;
+      return false;
+    });
+    if (match) {
+      nodeId = match.id;
+    }
   }
 
   const node = graph.getNode(nodeId);

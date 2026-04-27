@@ -60,6 +60,23 @@ describe("handleDataLineage", () => {
     expect(mapping!.transformExpression).toContain("UPPER");
   });
 
+  it("resolves table node without schema prefix via dbo default", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    // "Org_Staging" should resolve to "table:dbo.Org_Staging"
+    const result = handleDataLineage(graph, "Org_Staging", undefined, "downstream");
+    expect(result.error).toBeUndefined();
+    expect(result.entity).toBe("Org_Staging");
+    expect(result.paths.length).toBeGreaterThan(0);
+  });
+
+  it("resolves table node via case-insensitive scan", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    // "org_staging" (lowercase) should still match "table:dbo.Org_Staging"
+    const result = handleDataLineage(graph, "org_staging", undefined, "downstream");
+    expect(result.error).toBeUndefined();
+    expect(result.paths.length).toBeGreaterThan(0);
+  });
+
   it("returns empty paths for an unknown entity", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDataLineage(graph, "nonexistent_entity", undefined, "upstream");
