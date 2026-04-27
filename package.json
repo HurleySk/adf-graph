@@ -1,6 +1,6 @@
 {
   "name": "adf-graph",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "MCP server that builds a queryable dependency graph from ADF pipeline artifacts",
   "license": "MIT",
   "author": "HurleySk",

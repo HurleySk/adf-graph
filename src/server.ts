@@ -17,13 +17,15 @@ import { handleRemoveOverlay } from "./tools/removeOverlay.js";
 import { handleListOverlays } from "./tools/listOverlays.js";
 import { handleAddEnvironment } from "./tools/addEnvironment.js";
 import { handleRemoveEnvironment } from "./tools/removeEnvironment.js";
+import { handleDeployReadiness } from "./tools/deployReadiness.js";
+import { handleTraceParameters } from "./tools/traceParameters.js";
 
 const config = loadConfig();
 const manager = new GraphManager(config);
 
 const server = new McpServer({
   name: "adf-graph",
-  version: "0.4.0",
+  version: "0.6.0",
 });
 
 /** Shared optional environment parameter for all graph tools. */
@@ -188,7 +190,37 @@ server.tool(
   },
 );
 
-// Tool 9: graph_list_environments
+// Tool 9: graph_deploy_readiness
+server.tool(
+  "graph_deploy_readiness",
+  "Pre-flight check: walks the full dependency tree of a pipeline and reports what artifacts are present, stub (referenced but no file), or missing in the target environment. Also flags parameters with empty/null defaults that no parent supplies.",
+  {
+    pipeline: z.string().describe("Root pipeline name to check"),
+    environment: environmentParam,
+  },
+  async ({ pipeline, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const result = handleDeployReadiness(build.graph, pipeline);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 10: graph_trace_parameters
+server.tool(
+  "graph_trace_parameters",
+  "Trace parameter flow through ExecutePipeline chains from a root pipeline. Maps each parameter from source to sink and flags dead-ends: parameters with empty/null defaults that no caller supplies a value for.",
+  {
+    pipeline: z.string().describe("Root pipeline name to trace from"),
+    environment: environmentParam,
+  },
+  async ({ pipeline, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const result = handleTraceParameters(build.graph, pipeline);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 11: graph_list_environments
 server.tool(
   "graph_list_environments",
   "List all configured environments with their paths, default status, and graph statistics (node/edge counts, last build time, staleness).",

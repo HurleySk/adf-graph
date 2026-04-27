@@ -6,12 +6,12 @@
     "url": "https://github.com/HurleySk/adf-graph",
     "source": "github"
   },
-  "version": "0.5.0",
+  "version": "0.6.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "adf-graph",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       },
@@ -23,7 +23,9 @@
         { "name": "graph_data_lineage", "description": "Data flow paths for a Dataverse entity or staging table with optional column filter" },
         { "name": "graph_find_paths", "description": "All dependency paths between two named nodes" },
         { "name": "graph_search_queries", "description": "Search across activity SQL, FetchXML, stored procedure names/parameters, and ExecutePipeline parameter values" },
-        { "name": "graph_diff_pipeline", "description": "Compare a pipeline's structure across two environments" },
+        { "name": "graph_diff_pipeline", "description": "Compare a pipeline's structure across two environments with line-level SQL diffs" },
+        { "name": "graph_deploy_readiness", "description": "Pre-flight dependency check for a pipeline in a target environment" },
+        { "name": "graph_trace_parameters", "description": "Trace parameter flow through ExecutePipeline chains, flag dead-end parameters" },
         { "name": "graph_list_environments", "description": "List all configured environments with paths, stats, and staleness" },
         { "name": "graph_add_overlay", "description": "Add an overlay path to an environment for merged graph views" },
         { "name": "graph_remove_overlay", "description": "Remove a runtime overlay from an environment" },
