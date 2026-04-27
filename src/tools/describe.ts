@@ -16,9 +16,15 @@ export interface ActivityInfo {
   pipelineParameters?: Record<string, unknown>;
 }
 
+export interface ParameterDef {
+  name: string;
+  type: string;
+  defaultValue: unknown;
+}
+
 export interface PipelineSummary {
   name: string;
-  parameters: string[];
+  parameters: ParameterDef[];
   childPipelines: string[];
   rootOrchestrators: string[];
 }
@@ -79,7 +85,7 @@ export function handleDescribePipeline(
   }
 
   // Parameters from metadata
-  const parameters = (pipelineNode.metadata.parameters as string[]) ?? [];
+  const parameters = (pipelineNode.metadata.parameters as ParameterDef[]) ?? [];
 
   const summary: PipelineSummary = {
     name: pipeline,

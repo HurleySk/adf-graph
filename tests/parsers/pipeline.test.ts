@@ -124,6 +124,21 @@ describe("parsePipelineFile", () => {
     );
     expect(writesTo.map((e) => e.to)).toContain("table:dbo.Org_Staging");
   });
+
+  it("extracts parameter definitions with type and defaultValue", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const pipeline = result.nodes.find((n) => n.id === "pipeline:Test_Orchestrator");
+    expect(pipeline).toBeDefined();
+    const params = pipeline!.metadata.parameters as Array<{ name: string; type: string; defaultValue: unknown }>;
+    expect(params).toBeInstanceOf(Array);
+    const rootbu = params.find((p) => p.name === "rootbusinessunit");
+    expect(rootbu).toBeDefined();
+    expect(rootbu!.type).toBe("String");
+    expect(rootbu!.defaultValue).toBe("");
+    const uri = params.find((p) => p.name === "dataverse_service_uri");
+    expect(uri).toBeDefined();
+    expect(uri!.defaultValue).toBe("https://org.crm.dynamics.com");
+  });
 });
 
 describe("extractTablesFromSql", () => {

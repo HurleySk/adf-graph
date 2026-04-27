@@ -42,11 +42,19 @@ export function parsePipelineFile(json: unknown): ParseResult {
   // Pipeline node
   const pipelineId = `${NodeType.Pipeline}:${pipelineName}`;
   const paramDefs = (properties?.parameters as Record<string, unknown>) ?? {};
+  const parameters = Object.entries(paramDefs).map(([name, def]) => {
+    const d = def as Record<string, unknown> | null;
+    return {
+      name,
+      type: (d?.type as string) ?? "String",
+      defaultValue: d?.defaultValue ?? null,
+    };
+  });
   nodes.push({
     id: pipelineId,
     type: NodeType.Pipeline,
     name: pipelineName,
-    metadata: { parameters: Object.keys(paramDefs) },
+    metadata: { parameters },
   });
 
   for (const act of activities) {

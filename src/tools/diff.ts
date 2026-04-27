@@ -119,8 +119,8 @@ export function handleDiffPipeline(
   }
 
   // Parameter diff
-  const paramsA = new Set(resultA.summary.parameters);
-  const paramsB = new Set(resultB.summary.parameters);
+  const paramsA = new Set(resultA.summary.parameters.map((p) => p.name));
+  const paramsB = new Set(resultB.summary.parameters.map((p) => p.name));
   const addedParams = [...paramsB].filter((p) => !paramsA.has(p));
   const removedParams = [...paramsA].filter((p) => !paramsB.has(p));
   const parameterChanges = (addedParams.length > 0 || removedParams.length > 0)

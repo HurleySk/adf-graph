@@ -1,6 +1,16 @@
 {
   "name": "Test_Orchestrator",
   "properties": {
+    "parameters": {
+      "rootbusinessunit": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "dataverse_service_uri": {
+        "type": "String",
+        "defaultValue": "https://org.crm.dynamics.com"
+      }
+    },
     "activities": [
       {
         "name": "Run Copy To Staging",
