@@ -1,10 +1,19 @@
 import { Graph } from "../graph/model.js";
-import { handleDescribePipeline, ActivityInfo } from "./describe.js";
+import { handleDescribePipeline, ActivityInfo, ParameterDef } from "./describe.js";
+import { computeLineDiff } from "../utils/lineDiff.js";
+
+export interface FieldChange {
+  field: string;
+  summary: string;
+  before?: unknown;
+  after?: unknown;
+  lineDiff?: string[];
+}
 
 export interface ActivityDiff {
   activity: string;
   status: "added" | "removed" | "modified" | "unchanged";
-  changes?: string[];
+  details?: FieldChange[];
 }
 
 export interface PipelineDiffResult {
@@ -17,7 +26,11 @@ export interface PipelineDiffResult {
     modified: number;
     unchanged: number;
   };
-  parameterChanges?: { added: string[]; removed: string[] };
+  parameterChanges?: {
+    added: string[];
+    removed: string[];
+    modified: Array<{ name: string; before: ParameterDef; after: ParameterDef }>;
+  };
   activityDiffs: ActivityDiff[];
   error?: string;
 }
@@ -29,53 +42,105 @@ function arraysEqual(a: unknown[], b: unknown[]): boolean {
   return sortedA.every((v, i) => v === sortedB[i]);
 }
 
-function diffActivity(a: ActivityInfo, b: ActivityInfo): string[] {
-  const changes: string[] = [];
+function textDiff(field: string, a: string | undefined, b: string | undefined): FieldChange | null {
+  if (a === b) return null;
+  const change: FieldChange = {
+    field,
+    summary: `${field} changed`,
+    before: a ?? null,
+    after: b ?? null,
+  };
+  if (a && b) {
+    change.lineDiff = computeLineDiff(a, b);
+  }
+  return change;
+}
+
+function diffActivity(a: ActivityInfo, b: ActivityInfo): FieldChange[] {
+  const changes: FieldChange[] = [];
 
   if (a.activityType !== b.activityType) {
-    changes.push(`activityType: '${a.activityType}' → '${b.activityType}'`);
+    changes.push({
+      field: "activityType",
+      summary: `activityType: '${a.activityType}' → '${b.activityType}'`,
+      before: a.activityType,
+      after: b.activityType,
+    });
   }
 
   if (!arraysEqual(a.dependsOn, b.dependsOn)) {
-    changes.push(`dependsOn changed`);
+    changes.push({
+      field: "dependsOn",
+      summary: "dependsOn changed",
+      before: a.dependsOn,
+      after: b.dependsOn,
+    });
   }
 
   const srcA = a.sources ?? [];
   const srcB = b.sources ?? [];
   if (!arraysEqual(srcA, srcB)) {
-    changes.push(`sources changed`);
+    changes.push({
+      field: "sources",
+      summary: "sources changed",
+      before: srcA,
+      after: srcB,
+    });
   }
 
   const snkA = a.sinks ?? [];
   const snkB = b.sinks ?? [];
   if (!arraysEqual(snkA, snkB)) {
-    changes.push(`sinks changed`);
+    changes.push({
+      field: "sinks",
+      summary: "sinks changed",
+      before: snkA,
+      after: snkB,
+    });
   }
 
-  if (a.sqlQuery !== b.sqlQuery) {
-    changes.push(`sqlQuery changed`);
-  }
+  const sqlDiff = textDiff("sqlQuery", a.sqlQuery, b.sqlQuery);
+  if (sqlDiff) changes.push(sqlDiff);
 
-  if (a.fetchXmlQuery !== b.fetchXmlQuery) {
-    changes.push(`fetchXmlQuery changed`);
-  }
+  const fxmlDiff = textDiff("fetchXmlQuery", a.fetchXmlQuery, b.fetchXmlQuery);
+  if (fxmlDiff) changes.push(fxmlDiff);
 
   if (a.storedProcedureName !== b.storedProcedureName) {
-    changes.push(`storedProcedureName changed`);
+    changes.push({
+      field: "storedProcedureName",
+      summary: `storedProcedureName: '${a.storedProcedureName}' → '${b.storedProcedureName}'`,
+      before: a.storedProcedureName,
+      after: b.storedProcedureName,
+    });
   }
 
   if (JSON.stringify(a.storedProcedureParameters) !== JSON.stringify(b.storedProcedureParameters)) {
-    changes.push(`storedProcedureParameters changed`);
+    changes.push({
+      field: "storedProcedureParameters",
+      summary: "storedProcedureParameters changed",
+      before: a.storedProcedureParameters,
+      after: b.storedProcedureParameters,
+    });
   }
 
   if (JSON.stringify(a.pipelineParameters) !== JSON.stringify(b.pipelineParameters)) {
-    changes.push(`pipelineParameters changed`);
+    changes.push({
+      field: "pipelineParameters",
+      summary: "pipelineParameters changed",
+      before: a.pipelineParameters,
+      after: b.pipelineParameters,
+    });
   }
 
   const colsA = a.columnMappings ?? [];
   const colsB = b.columnMappings ?? [];
   if (!arraysEqual(colsA, colsB)) {
-    changes.push(`columnMappings changed (${colsA.length} → ${colsB.length})`);
+    changes.push({
+      field: "columnMappings",
+      summary: `columnMappings changed (${colsA.length} → ${colsB.length})`,
+      before: colsA,
+      after: colsB,
+    });
   }
 
   return changes;
@@ -118,14 +183,26 @@ export function handleDiffPipeline(
     };
   }
 
-  // Parameter diff
-  const paramsA = new Set(resultA.summary.parameters.map((p) => p.name));
-  const paramsB = new Set(resultB.summary.parameters.map((p) => p.name));
-  const addedParams = [...paramsB].filter((p) => !paramsA.has(p));
-  const removedParams = [...paramsA].filter((p) => !paramsB.has(p));
-  const parameterChanges = (addedParams.length > 0 || removedParams.length > 0)
-    ? { added: addedParams, removed: removedParams }
-    : undefined;
+  // Parameter diff — now with definition comparison
+  const paramsA = resultA.summary.parameters;
+  const paramsB = resultB.summary.parameters;
+  const paramNamesA = new Set(paramsA.map((p) => p.name));
+  const paramNamesB = new Set(paramsB.map((p) => p.name));
+  const addedParams = [...paramNamesB].filter((n) => !paramNamesA.has(n));
+  const removedParams = [...paramNamesA].filter((n) => !paramNamesB.has(n));
+  const modifiedParams: Array<{ name: string; before: ParameterDef; after: ParameterDef }> = [];
+
+  for (const pA of paramsA) {
+    const pB = paramsB.find((p) => p.name === pA.name);
+    if (pB && (pA.type !== pB.type || JSON.stringify(pA.defaultValue) !== JSON.stringify(pB.defaultValue))) {
+      modifiedParams.push({ name: pA.name, before: pA, after: pB });
+    }
+  }
+
+  const parameterChanges =
+    addedParams.length > 0 || removedParams.length > 0 || modifiedParams.length > 0
+      ? { added: addedParams, removed: removedParams, modified: modifiedParams }
+      : undefined;
 
   // Activity diff
   const activitiesA = new Map((resultA.activities ?? []).map((a) => [a.name, a]));
@@ -140,9 +217,9 @@ export function handleDiffPipeline(
       activityDiffs.push({ activity: name, status: "removed" });
       removed++;
     } else {
-      const changes = diffActivity(actA, actB);
-      if (changes.length > 0) {
-        activityDiffs.push({ activity: name, status: "modified", changes });
+      const details = diffActivity(actA, actB);
+      if (details.length > 0) {
+        activityDiffs.push({ activity: name, status: "modified", details });
         modified++;
       } else {
         activityDiffs.push({ activity: name, status: "unchanged" });

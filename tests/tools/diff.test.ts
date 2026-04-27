@@ -28,31 +28,31 @@ describe("handleDiffPipeline", () => {
   it("reports all activities added when pipeline only in envB", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);
-    // Remove pipeline from graphA by using an empty graph
     const { graph: emptyGraph } = buildGraph(join(import.meta.dirname, "../fixtures/overlay-structured"));
     const result = handleDiffPipeline(emptyGraph, graphB, "Copy_To_Dataverse", "envA", "envB");
     expect(result.error).toContain("only exists in envB");
     expect(result.summary.added).toBe(1);
   });
 
-  it("detects modified activities when SQL differs", () => {
+  it("returns structured FieldChange with lineDiff for SQL changes", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);
-    // Mutate an activity in graphB to simulate a different environment
     const actNode = graphB.getNode("activity:Copy_To_Dataverse/Upsert Organizations");
     expect(actNode).toBeDefined();
-    actNode!.metadata.sqlQuery = "SELECT * FROM dbo.Org_Staging WHERE env = 'prod'";
+    actNode!.metadata.sqlQuery = "SELECT org_id, org_name\nFROM dbo.Org_Staging\nWHERE env = 'prod'";
     const result = handleDiffPipeline(graphA, graphB, "Copy_To_Dataverse", "envA", "envB");
-    expect(result.error).toBeUndefined();
     const modified = result.activityDiffs.find((d) => d.status === "modified");
     expect(modified).toBeDefined();
-    expect(modified!.activity).toBe("Upsert Organizations");
-    expect(modified!.changes).toBeDefined();
-    expect(modified!.changes!.some((c) => c.includes("sqlQuery"))).toBe(true);
-    expect(result.summary.modified).toBe(1);
+    expect(modified!.details).toBeDefined();
+    const sqlChange = modified!.details!.find((d) => d.field === "sqlQuery");
+    expect(sqlChange).toBeDefined();
+    expect(sqlChange!.before).toBeDefined();
+    expect(sqlChange!.after).toContain("org_name");
+    expect(sqlChange!.lineDiff).toBeDefined();
+    expect(sqlChange!.lineDiff!.some((l) => l.startsWith("+"))).toBe(true);
   });
 
-  it("detects modified activities when storedProcedureName differs", () => {
+  it("detects storedProcedureName change with before/after", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);
     const actNode = graphB.getNode("activity:SP_Transform/Run p_Transform_Org");
@@ -61,10 +61,13 @@ describe("handleDiffPipeline", () => {
     const result = handleDiffPipeline(graphA, graphB, "SP_Transform", "envA", "envB");
     const modified = result.activityDiffs.find((d) => d.status === "modified");
     expect(modified).toBeDefined();
-    expect(modified!.changes!.some((c) => c.includes("storedProcedureName"))).toBe(true);
+    const spChange = modified!.details!.find((d) => d.field === "storedProcedureName");
+    expect(spChange).toBeDefined();
+    expect(spChange!.before).toBe("dbo.p_Transform_Org");
+    expect(spChange!.after).toBe("dbo.p_Transform_Org_V2");
   });
 
-  it("detects modified activities when storedProcedureParameters differs", () => {
+  it("detects storedProcedureParameters change", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);
     const actNode = graphB.getNode("activity:SP_Transform/Run p_Transform_Org");
@@ -73,10 +76,10 @@ describe("handleDiffPipeline", () => {
     const result = handleDiffPipeline(graphA, graphB, "SP_Transform", "envA", "envB");
     const modified = result.activityDiffs.find((d) => d.status === "modified");
     expect(modified).toBeDefined();
-    expect(modified!.changes!.some((c) => c.includes("storedProcedureParameters"))).toBe(true);
+    expect(modified!.details!.find((d) => d.field === "storedProcedureParameters")).toBeDefined();
   });
 
-  it("detects modified activities when pipelineParameters differs", () => {
+  it("detects pipelineParameters change", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);
     const actNode = graphB.getNode("activity:Test_Orchestrator/Run Copy To Dataverse");
@@ -85,13 +88,22 @@ describe("handleDiffPipeline", () => {
     const result = handleDiffPipeline(graphA, graphB, "Test_Orchestrator", "envA", "envB");
     const modified = result.activityDiffs.find((d) => d.status === "modified");
     expect(modified).toBeDefined();
-    expect(modified!.changes!.some((c) => c.includes("pipelineParameters"))).toBe(true);
+    expect(modified!.details!.find((d) => d.field === "pipelineParameters")).toBeDefined();
   });
 
-  it("detects parameter changes between environments", () => {
+  it("detects parameter definition changes between environments", () => {
     const { graph: graphA } = buildGraph(fixtureRoot);
     const { graph: graphB } = buildGraph(fixtureRoot);
+    const pNode = graphB.getNode("pipeline:Test_Orchestrator");
+    expect(pNode).toBeDefined();
+    pNode!.metadata.parameters = [
+      { name: "rootbusinessunit", type: "String", defaultValue: "changed" },
+      { name: "dataverse_service_uri", type: "String", defaultValue: "https://org.crm.dynamics.com" },
+      { name: "new_param", type: "Int", defaultValue: 0 },
+    ];
     const result = handleDiffPipeline(graphA, graphB, "Test_Orchestrator", "envA", "envB");
-    expect(result.parameterChanges).toBeUndefined();
+    expect(result.parameterChanges).toBeDefined();
+    expect(result.parameterChanges!.added).toContain("new_param");
+    expect(result.parameterChanges!.modified.find((m) => m.name === "rootbusinessunit")).toBeDefined();
   });
 });
