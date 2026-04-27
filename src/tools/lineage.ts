@@ -1,5 +1,4 @@
-import { Graph, GraphNode, NodeType, EdgeType, GraphEdge } from "../graph/model.js";
-import { parseNodeId } from "../utils/nodeId.js";
+import { Graph, EdgeType, GraphEdge, NodeType } from "../graph/model.js";
 
 export type LineageDirection = "upstream" | "downstream";
 
@@ -51,44 +50,6 @@ function pathToSteps(graph: Graph, path: GraphEdge[], direction: LineageDirectio
   });
 }
 
-function resolveEntityNode(
-  graph: Graph,
-  entity: string,
-): { nodeId: string; node: GraphNode; error: null } | { nodeId: null; node: null; error: string } {
-  if (entity.includes(":")) {
-    const { type } = parseNodeId(entity);
-    if (type === "table" || type === "dataverse_entity") {
-      const directNode = graph.getNode(entity);
-      if (directNode) return { nodeId: entity, node: directNode, error: null };
-    }
-  }
-
-  const dvId = `dataverse_entity:${entity}`;
-  const dvNode = graph.getNode(dvId);
-  if (dvNode) return { nodeId: dvId, node: dvNode, error: null };
-
-  const tableId = `table:${entity}`;
-  const tableNode = graph.getNode(tableId);
-  if (tableNode) return { nodeId: tableId, node: tableNode, error: null };
-
-  const lowerEntity = entity.toLowerCase();
-  const candidates: GraphNode[] = [];
-  for (const n of graph.getNodesByType(NodeType.Table)) {
-    if (n.name.toLowerCase() === lowerEntity) candidates.push(n);
-  }
-  for (const n of graph.getNodesByType(NodeType.DataverseEntity)) {
-    if (n.name.toLowerCase() === lowerEntity) candidates.push(n);
-  }
-
-  if (candidates.length === 1) return { nodeId: candidates[0].id, node: candidates[0], error: null };
-  if (candidates.length > 1) {
-    const ids = candidates.map((c) => c.id).join(", ");
-    return { nodeId: null, node: null, error: `Ambiguous entity '${entity}' — matches multiple nodes: ${ids}` };
-  }
-
-  return { nodeId: null, node: null, error: `Node for '${entity}' not found as dataverse_entity or table` };
-}
-
 /**
  * Trace data lineage for a Dataverse entity or table using data-flow semantics:
  *
@@ -108,19 +69,44 @@ export function handleDataLineage(
   direction: LineageDirection = "upstream",
   maxDepth?: number,
 ): DataLineageResult {
-  const resolved = resolveEntityNode(graph, entity);
-  if (!resolved.nodeId) {
+  // Resolve node ID: try dataverse_entity first, then table (exact), then dbo-prefixed, then scan
+  let nodeId = `dataverse_entity:${entity}`;
+  if (!graph.getNode(nodeId)) {
+    nodeId = `table:${entity}`;
+  }
+  if (!graph.getNode(nodeId)) {
+    // Try with dbo schema prefix (most common)
+    nodeId = `table:dbo.${entity}`;
+  }
+  if (!graph.getNode(nodeId)) {
+    // Scan all table nodes for a case-insensitive name match (handles any schema)
+    const entityLower = entity.toLowerCase();
+    const tableNodes = graph.getNodesByType(NodeType.Table);
+    const match = tableNodes.find((n) => {
+      // Match against full id suffix (e.g., "dbo.Foo") or just the table name
+      const idSuffix = n.id.slice("table:".length);
+      if (idSuffix.toLowerCase() === entityLower) return true;
+      // Also match just the table name part (after the schema dot)
+      const dotIdx = idSuffix.indexOf(".");
+      if (dotIdx >= 0 && idSuffix.slice(dotIdx + 1).toLowerCase() === entityLower) return true;
+      return false;
+    });
+    if (match) {
+      nodeId = match.id;
+    }
+  }
+
+  const node = graph.getNode(nodeId);
+  if (!node) {
     return {
       entity,
       attribute,
       direction,
       paths: [],
       columnMappings: [],
-      error: resolved.error ?? undefined,
+      error: `Node for '${entity}' not found as dataverse_entity or table`,
     };
   }
-
-  const nodeId: string = resolved.nodeId;
 
   const paths: LineagePath[] = [];
   const visitedNodes = new Set<string>();

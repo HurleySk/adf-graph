@@ -29,7 +29,7 @@ const manager = new GraphManager(config);
 
 const server = new McpServer({
   name: "adf-graph",
-  version: "0.8.1",
+  version: "0.8.2",
 });
 
 /** Shared optional environment parameter for all graph tools. */

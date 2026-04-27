@@ -112,9 +112,31 @@ describe("parsePipelineFile", () => {
 
   it("omits pipelineParameters when none specified (orchestrator ExecutePipeline)", () => {
     const result = parsePipelineFile(loadFixture("orchestrator.json"));
-    const activity = result.nodes.find((n) => n.id === "activity:Test_Orchestrator/Run Copy To Staging");
+    const activity = result.nodes.find((n) => n.id === "activity:Test_Orchestrator/Run SP Transform");
     expect(activity).toBeDefined();
     expect(activity!.metadata.pipelineParameters).toBeUndefined();
+  });
+
+  it("extracts source tables from source_query parameter in ExecutePipeline", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const readsFrom = result.edges.filter(
+      (e) =>
+        e.type === "reads_from" &&
+        e.from === "activity:Test_Orchestrator/Run Copy To Staging" &&
+        e.to.startsWith("table:")
+    );
+    expect(readsFrom.map((e) => e.to)).toContain("table:dbo.Work_Item_Milestone");
+  });
+
+  it("extracts source table from source_object_name parameter in ExecutePipeline", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const readsFrom = result.edges.filter(
+      (e) =>
+        e.type === "reads_from" &&
+        e.from === "activity:Test_Orchestrator/Run Copy To Staging" &&
+        e.to.startsWith("table:")
+    );
+    expect(readsFrom.map((e) => e.to)).toContain("table:dbo.LegacyOrg");
   });
 
   it("extracts table from output dataset params (copy-to-staging writes table:dbo.Org_Staging)", () => {

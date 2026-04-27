@@ -102,7 +102,7 @@ All tools except `graph_list_environments` accept an optional `environment` para
 | `graph_find_consumers` | All pipeline activities that read/write/call a given artifact |
 | `graph_describe_pipeline` | Pipeline summary, activity list, or full detail with SQL queries and column mappings |
 | `graph_impact_analysis` | All nodes affected upstream/downstream if an artifact changes |
-| `graph_data_lineage` | Data flow paths for a Dataverse entity or staging table; optional column filter and depth limit |
+| `graph_data_lineage` | Data flow paths for a Dataverse entity or table (resolves unqualified names like `Org_Staging` to `dbo.Org_Staging`); includes source tables from pipeline parameters; optional column filter and depth limit |
 | `graph_find_paths` | All dependency paths between two named nodes |
 | `graph_search_queries` | Search across all activity SQL and FetchXML for a text pattern |
 | `graph_diff_pipeline` | Compare a pipeline's structure across two environments |
