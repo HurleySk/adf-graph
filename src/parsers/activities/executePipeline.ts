@@ -46,7 +46,7 @@ export function parseExecutePipeline(
       sqlText = sourceQuery;
     } else if (sourceQuery && typeof sourceQuery === "object") {
       const q = sourceQuery as Record<string, unknown>;
-      if (typeof q.value === "string") {
+      if (q.type === "Expression" && typeof q.value === "string") {
         sqlText = q.value;
       }
     }
