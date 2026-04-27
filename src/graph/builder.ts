@@ -1,11 +1,14 @@
 import { readdirSync, statSync, existsSync, readFileSync } from "fs";
 import { join, extname, basename } from "path";
-import { Graph, GraphNode, NodeType } from "./model.js";
+import { Graph, GraphNode, GraphEdge, NodeType, EdgeType } from "./model.js";
+import { ADF_DIRS } from "../constants.js";
+import { inferNodeType, parseNodeId } from "../utils/nodeId.js";
 import { ParseResult, parsePipelineFile } from "../parsers/pipeline.js";
 import { extractColumnMappings } from "../parsers/columns.js";
 import { parseDatasetFile } from "../parsers/dataset.js";
 import { parseLinkedServiceFile } from "../parsers/linkedService.js";
 import { scanSqlDirectory } from "../parsers/sql.js";
+import { parseSpBody } from "../parsers/spColumnParser.js";
 
 export interface BuildResult {
   graph: Graph;
@@ -29,32 +32,70 @@ function merge(graph: Graph, result: ParseResult): void {
 }
 
 /**
- * Infer NodeType from an ID prefix (e.g., "pipeline:Foo" → NodeType.Pipeline).
- * Returns null for unknown prefixes — caller should skip.
+ * Generic helper that reads JSON files from a directory, parses each with the
+ * given parser, and merges the results into the graph.  An optional postProcess
+ * callback runs after a successful parse (used for column-mapping extraction in
+ * the pipeline pass).
  */
-function inferNodeType(id: string): NodeType | null {
-  const prefix = id.split(":")[0];
-  switch (prefix) {
-    case "pipeline":
-      return NodeType.Pipeline;
-    case "activity":
-      return NodeType.Activity;
-    case "dataset":
-      return NodeType.Dataset;
-    case "stored_procedure":
-      return NodeType.StoredProcedure;
-    case "table":
-      return NodeType.Table;
-    case "dataverse_entity":
-      return NodeType.DataverseEntity;
-    case "linked_service":
-      return NodeType.LinkedService;
-    case "key_vault_secret":
-      return NodeType.KeyVaultSecret;
-    default:
-      return null;
+function processJsonDirectory(
+  rootPath: string,
+  dirName: string,
+  parser: (json: unknown) => ParseResult,
+  graph: Graph,
+  warnings: string[],
+  postProcess?: (filePath: string, json: unknown, graph: Graph) => void,
+): void {
+  const dir = join(rootPath, dirName);
+  if (!existsSync(dir)) return;
+
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(dir);
+  } catch (err) {
+    warnings.push(`Failed to read ${dirName} dir: ${String(err)}`);
+    return;
+  }
+
+  for (const entry of entries) {
+    if (extname(entry).toLowerCase() !== ".json") continue;
+    const filePath = join(dir, entry);
+    try {
+      const json = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
+      const result = parser(json);
+      warnings.push(...result.warnings);
+      merge(graph, result);
+      if (postProcess) {
+        postProcess(filePath, json, graph);
+      }
+    } catch (err) {
+      warnings.push(`Failed to parse ${dirName} file '${entry}': ${String(err)}`);
+    }
   }
 }
+
+/**
+ * Post-process callback for pipeline files: extracts column mappings for Copy
+ * activities and adds them to the graph.
+ */
+function extractPipelineColumnMappings(_filePath: string, json: unknown, graph: Graph): void {
+  const root = json as Record<string, unknown>;
+  const pipelineName = root.name as string;
+  const properties = root.properties as Record<string, unknown> | undefined;
+  const activities = (properties?.activities as unknown[]) ?? [];
+  for (const act of activities) {
+    const activity = act as Record<string, unknown>;
+    const activityName = activity.name as string;
+    const activityType = activity.type as string;
+    if (activityType === "Copy") {
+      const activityId = `activity:${pipelineName}/${activityName}`;
+      const colEdges = extractColumnMappings(activityId, activity);
+      for (const edge of colEdges) {
+        graph.addEdge(edge);
+      }
+    }
+  }
+}
+
 
 /**
  * Build a dependency graph from an ADF artifact root directory.
@@ -71,94 +112,16 @@ export function buildGraph(rootPath: string): BuildResult {
   const warnings: string[] = [];
 
   // ── Pass 1: Pipelines ────────────────────────────────────────────────────
-  const pipelineDir = join(rootPath, "pipeline");
-  if (existsSync(pipelineDir)) {
-    let entries: string[] = [];
-    try {
-      entries = readdirSync(pipelineDir);
-    } catch (err) {
-      warnings.push(`Failed to read pipeline dir: ${String(err)}`);
-    }
-    for (const entry of entries) {
-      if (extname(entry).toLowerCase() !== ".json") continue;
-      const filePath = join(pipelineDir, entry);
-      try {
-        const json = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-        const result = parsePipelineFile(json);
-        warnings.push(...result.warnings);
-        merge(graph, result);
-
-        // Also extract column mappings for Copy activities
-        const root = json as Record<string, unknown>;
-        const pipelineName = root.name as string;
-        const properties = root.properties as Record<string, unknown> | undefined;
-        const activities = (properties?.activities as unknown[]) ?? [];
-        for (const act of activities) {
-          const activity = act as Record<string, unknown>;
-          const activityName = activity.name as string;
-          const activityType = activity.type as string;
-          if (activityType === "Copy") {
-            const activityId = `activity:${pipelineName}/${activityName}`;
-            const colEdges = extractColumnMappings(activityId, activity);
-            for (const edge of colEdges) {
-              graph.addEdge(edge);
-            }
-          }
-        }
-      } catch (err) {
-        warnings.push(`Failed to parse pipeline file '${entry}': ${String(err)}`);
-      }
-    }
-  }
+  processJsonDirectory(rootPath, ADF_DIRS.PIPELINE, parsePipelineFile, graph, warnings, extractPipelineColumnMappings);
 
   // ── Pass 2: Datasets ─────────────────────────────────────────────────────
-  const datasetDir = join(rootPath, "dataset");
-  if (existsSync(datasetDir)) {
-    let entries: string[] = [];
-    try {
-      entries = readdirSync(datasetDir);
-    } catch (err) {
-      warnings.push(`Failed to read dataset dir: ${String(err)}`);
-    }
-    for (const entry of entries) {
-      if (extname(entry).toLowerCase() !== ".json") continue;
-      const filePath = join(datasetDir, entry);
-      try {
-        const json = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-        const result = parseDatasetFile(json);
-        warnings.push(...result.warnings);
-        merge(graph, result);
-      } catch (err) {
-        warnings.push(`Failed to parse dataset file '${entry}': ${String(err)}`);
-      }
-    }
-  }
+  processJsonDirectory(rootPath, ADF_DIRS.DATASET, parseDatasetFile, graph, warnings);
 
   // ── Pass 3: Linked Services ───────────────────────────────────────────────
-  const linkedServiceDir = join(rootPath, "linkedService");
-  if (existsSync(linkedServiceDir)) {
-    let entries: string[] = [];
-    try {
-      entries = readdirSync(linkedServiceDir);
-    } catch (err) {
-      warnings.push(`Failed to read linkedService dir: ${String(err)}`);
-    }
-    for (const entry of entries) {
-      if (extname(entry).toLowerCase() !== ".json") continue;
-      const filePath = join(linkedServiceDir, entry);
-      try {
-        const json = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-        const result = parseLinkedServiceFile(json);
-        warnings.push(...result.warnings);
-        merge(graph, result);
-      } catch (err) {
-        warnings.push(`Failed to parse linked service file '${entry}': ${String(err)}`);
-      }
-    }
-  }
+  processJsonDirectory(rootPath, ADF_DIRS.LINKED_SERVICE, parseLinkedServiceFile, graph, warnings);
 
   // ── Pass 4: SQL ───────────────────────────────────────────────────────────
-  const sqlBaseDir = join(rootPath, "SQL DB");
+  const sqlBaseDir = join(rootPath, ADF_DIRS.SQL);
   if (existsSync(sqlBaseDir)) {
     let projects: string[] = [];
     try {
@@ -184,13 +147,77 @@ export function buildGraph(rootPath: string): BuildResult {
     }
   }
 
+  // ── Pass 4b: SP column-level mappings ──────────────────────────────────────
+  const spNodes = graph.getNodesByType(NodeType.StoredProcedure);
+  for (const spNode of spNodes) {
+    const filePath = spNode.metadata.filePath as string | undefined;
+    if (!filePath || !existsSync(filePath)) continue;
+
+    let sqlContent: string;
+    try {
+      sqlContent = readFileSync(filePath, "utf-8");
+    } catch (err) {
+      warnings.push(`Failed to read SP file '${filePath}': ${String(err)}`);
+      continue;
+    }
+
+    const parseResult = parseSpBody(spNode.name, sqlContent);
+    warnings.push(...parseResult.warnings);
+
+    // Store confidence on SP node metadata
+    spNode.metadata.spConfidence = parseResult.confidence;
+    spNode.metadata.spMappingCount = parseResult.mappings.length;
+    graph.replaceNode(spNode);
+
+    // Add reads_from edges: SP → source table
+    for (const sourceTable of parseResult.readTables) {
+      const tableNodeId = `${NodeType.Table}:${sourceTable}`;
+      const edge: GraphEdge = {
+        from: spNode.id,
+        to: tableNodeId,
+        type: EdgeType.ReadsFrom,
+        metadata: {},
+      };
+      graph.addEdge(edge);
+    }
+
+    // Add writes_to edges: SP → target table
+    for (const targetTable of parseResult.writeTables) {
+      const tableNodeId = `${NodeType.Table}:${targetTable}`;
+      const edge: GraphEdge = {
+        from: spNode.id,
+        to: tableNodeId,
+        type: EdgeType.WritesTo,
+        metadata: {},
+      };
+      graph.addEdge(edge);
+    }
+
+    // Add maps_column edges (SP self-edges) for each column mapping
+    for (const mapping of parseResult.mappings) {
+      const edge: GraphEdge = {
+        from: spNode.id,
+        to: spNode.id,
+        type: EdgeType.MapsColumn,
+        metadata: {
+          sourceTable: mapping.sourceTable,
+          sourceColumn: mapping.sourceColumn,
+          targetTable: mapping.targetTable,
+          targetColumn: mapping.targetColumn,
+          ...(mapping.transformExpression ? { transformExpression: mapping.transformExpression } : {}),
+        },
+      };
+      graph.addEdge(edge);
+    }
+  }
+
   // ── Pass 5: Stub nodes ────────────────────────────────────────────────────
   const referencedIds = graph.getAllReferencedIds();
   for (const id of referencedIds) {
     if (!graph.getNode(id)) {
       const nodeType = inferNodeType(id);
       if (!nodeType) continue; // skip unknown prefixes
-      const name = id.includes(":") ? id.slice(id.indexOf(":") + 1) : id;
+      const name = parseNodeId(id).name;
       const stub: GraphNode = {
         id,
         type: nodeType,

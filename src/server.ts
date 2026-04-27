@@ -19,13 +19,17 @@ import { handleAddEnvironment } from "./tools/addEnvironment.js";
 import { handleRemoveEnvironment } from "./tools/removeEnvironment.js";
 import { handleDeployReadiness } from "./tools/deployReadiness.js";
 import { handleTraceParameters } from "./tools/traceParameters.js";
+import { handleFindOrchestrators } from "./tools/findOrchestrators.js";
+import { handleDiffEnvironments } from "./tools/diffEnvironments.js";
+import { handleValidate } from "./tools/validate.js";
+import { handleEnhancedSearch } from "./tools/enhancedSearch.js";
 
 const config = loadConfig();
 const manager = new GraphManager(config);
 
 const server = new McpServer({
   name: "adf-graph",
-  version: "0.6.1",
+  version: "0.7.0",
 });
 
 /** Shared optional environment parameter for all graph tools. */
@@ -299,6 +303,72 @@ server.tool(
   },
   async ({ name }) => {
     const result = handleRemoveEnvironment(manager, name);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 17: graph_find_orchestrators
+server.tool(
+  "graph_find_orchestrators",
+  "Find root orchestrator pipelines that own a given pipeline. Returns full ancestry chains with depth.",
+  {
+    pipeline: z.string().describe("Pipeline name to trace ancestry for"),
+    environment: environmentParam,
+  },
+  async ({ pipeline, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const result = handleFindOrchestrators(build.graph, pipeline);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 18: graph_diff_environments
+server.tool(
+  "graph_diff_environments",
+  "Compare pipelines across two environments. Returns added/removed/changed pipelines with summary-level diffs.",
+  {
+    envA: z.string().describe("First environment name"),
+    envB: z.string().describe("Second environment name"),
+    scope: z.enum(["pipelines", "all"]).default("pipelines").describe("What to compare: pipelines only or all artifact types"),
+  },
+  async ({ envA, envB, scope }) => {
+    const result = handleDiffEnvironments(manager, envA, envB, scope);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 19: graph_validate
+server.tool(
+  "graph_validate",
+  "Run graph-wide validation: broken references, empty-default parameters without suppliers, unused datasets, orphaned nodes. Returns errors and warnings.",
+  {
+    environment: environmentParam,
+    severity: z.enum(["all", "error", "warning"]).default("all").describe("Filter by severity"),
+  },
+  async ({ environment, severity }) => {
+    const build = manager.ensureGraph(environment);
+    const envName = environment ?? manager.getDefaultEnvironment();
+    const result = handleValidate(build.graph, envName, severity);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 20: graph_search
+server.tool(
+  "graph_search",
+  "Flexible search across the graph with optional filters for activity type, node type, target entity, and pipeline scope. Supports summary and full detail modes.",
+  {
+    query: z.string().min(1).describe("Search text (case-insensitive substring match)"),
+    activityType: z.string().optional().describe("Filter to activities of this type (e.g. 'Copy', 'ExecutePipeline')"),
+    nodeType: z.string().optional().describe("Filter to this node type (e.g. 'pipeline', 'dataset')"),
+    targetEntity: z.string().optional().describe("Filter to activities that reference this entity/table"),
+    pipeline: z.string().optional().describe("Filter to activities within this pipeline"),
+    detail: z.enum(["summary", "full"]).default("summary").describe("Level of detail per hit"),
+    environment: environmentParam,
+  },
+  async ({ query, activityType, nodeType, targetEntity, pipeline, detail, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const result = handleEnhancedSearch(build.graph, query, { activityType, nodeType, targetEntity, pipeline, detail });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );

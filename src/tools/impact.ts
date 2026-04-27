@@ -1,4 +1,5 @@
 import { Graph, GraphEdge } from "../graph/model.js";
+import { makeNodeId } from "../utils/nodeId.js";
 
 export type ImpactDirection = "upstream" | "downstream" | "both";
 
@@ -31,7 +32,7 @@ export function handleImpactAnalysis(
   targetType: string,
   direction: ImpactDirection = "both",
 ): ImpactAnalysisResult {
-  const nodeId = `${targetType}:${target}`;
+  const nodeId = makeNodeId(targetType, target);
   const node = graph.getNode(nodeId);
 
   if (!node) {

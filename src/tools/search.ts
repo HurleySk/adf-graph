@@ -1,4 +1,6 @@
 import { Graph, NodeType } from "../graph/model.js";
+import { getActivityType } from "../graph/nodeMetadata.js";
+import { parseActivityId } from "../utils/nodeId.js";
 
 export interface SearchMatch {
   pipeline: string;
@@ -22,8 +24,7 @@ export function handleSearchQueries(
   const lowerQuery = query.toLowerCase();
 
   for (const activity of activities) {
-    const slashIdx = activity.id.indexOf("/");
-    const pipeline = activity.id.slice("activity:".length, slashIdx);
+    const { pipeline } = parseActivityId(activity.id);
 
     for (const field of ["sqlQuery", "fetchXmlQuery", "storedProcedureName"] as const) {
       const text = activity.metadata[field];
@@ -32,7 +33,7 @@ export function handleSearchQueries(
         matches.push({
           pipeline,
           activity: activity.name,
-          activityType: (activity.metadata.activityType as string) ?? "Unknown",
+          activityType: getActivityType(activity),
           field,
           snippet: text,
         });
@@ -47,7 +48,7 @@ export function handleSearchQueries(
         matches.push({
           pipeline,
           activity: activity.name,
-          activityType: (activity.metadata.activityType as string) ?? "Unknown",
+          activityType: getActivityType(activity),
           field,
           snippet: text,
         });

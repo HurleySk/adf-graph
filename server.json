@@ -6,12 +6,12 @@
     "url": "https://github.com/HurleySk/adf-graph",
     "source": "github"
   },
-  "version": "0.6.1",
+  "version": "0.7.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "adf-graph",
-      "version": "0.6.1",
+      "version": "0.7.0",
       "transport": {
         "type": "stdio"
       },
@@ -31,7 +31,11 @@
         { "name": "graph_remove_overlay", "description": "Remove a runtime overlay from an environment" },
         { "name": "graph_list_overlays", "description": "List all overlays for an environment" },
         { "name": "graph_add_environment", "description": "Register a new ephemeral environment pointing to an ADF root" },
-        { "name": "graph_remove_environment", "description": "Remove a runtime environment" }
+        { "name": "graph_remove_environment", "description": "Remove a runtime environment" },
+        { "name": "graph_find_orchestrators", "description": "Find root orchestrator pipelines that own a given pipeline with full ancestry chains" },
+        { "name": "graph_diff_environments", "description": "Compare pipelines across two environments, showing added/removed/changed artifacts" },
+        { "name": "graph_validate", "description": "Graph-wide validation: broken references, empty defaults, unused datasets, orphan nodes" },
+        { "name": "graph_search", "description": "Flexible search with filters for activity type, node type, target entity, and pipeline scope" }
       ],
       "environmentVariables": [
         {

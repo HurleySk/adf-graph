@@ -1,4 +1,8 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { findExecutePipelineActivities } from "../graph/traversalUtils.js";
+import { parseNodeId } from "../utils/nodeId.js";
+import { lookupPipelineNode } from "./toolUtils.js";
 
 interface ParameterSupplier {
   fromPipeline: string;
@@ -31,18 +35,17 @@ export interface ParameterTraceResult {
 }
 
 export function handleTraceParameters(graph: Graph, pipeline: string): ParameterTraceResult {
-  const pipelineId = `${NodeType.Pipeline}:${pipeline}`;
-  const pipelineNode = graph.getNode(pipelineId);
-
-  if (!pipelineNode) {
+  const lookup = lookupPipelineNode(graph, pipeline);
+  if (lookup.error !== undefined) {
     return {
       pipeline,
       parameterFlows: [],
       deadEnds: [],
       warnings: [],
-      error: `Pipeline '${pipeline}' not found`,
+      error: lookup.error,
     };
   }
+  const pipelineId = lookup.id;
 
   const flows: ParameterFlow[] = [];
   const deadEnds: DeadEndParameter[] = [];
@@ -71,8 +74,8 @@ function tracePipeline(
   const node = graph.getNode(pipelineId);
   if (!node) return;
 
-  const paramDefs = node.metadata.parameters as Array<{ name: string; type: string; defaultValue: unknown }> | undefined;
-  if (!paramDefs || !Array.isArray(paramDefs) || paramDefs.length === 0) {
+  const paramDefs = getParameterDefs(node);
+  if (paramDefs.length === 0) {
     // No parameters — still recurse into children
     recurseIntoChildren(graph, pipelineId, node.name, flows, deadEnds, warnings, visited);
     return;
@@ -125,18 +128,14 @@ function recurseIntoChildren(
   warnings: string[],
   visited: Set<string>,
 ): void {
-  const containsEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Contains);
   const executesEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Executes);
-
-  const execActivities = containsEdges
-    .map((ce) => graph.getNode(ce.to))
-    .filter((n): n is NonNullable<typeof n> => n !== undefined && n.metadata.activityType === "ExecutePipeline");
+  const execActivities = findExecutePipelineActivities(graph, pipelineId);
 
   for (const execEdge of executesEdges) {
     const childPipelineId = execEdge.to;
-    const childPipelineName = childPipelineId.split(":")[1];
-    const actNode = execActivities.find((a) => a.metadata.executedPipeline === childPipelineName);
-    const childSupplied = actNode?.metadata.pipelineParameters as Record<string, unknown> | undefined;
+    const childPipelineName = parseNodeId(childPipelineId).name;
+    const actNode = execActivities.find((a) => getActivityMetadata(a).executedPipeline === childPipelineName);
+    const childSupplied = actNode ? getActivityMetadata(actNode).pipelineParameters : undefined;
     const actName = actNode?.name ?? "ExecutePipeline";
 
     tracePipeline(graph, childPipelineId, parentName, actName, childSupplied ?? null, flows, deadEnds, warnings, visited);

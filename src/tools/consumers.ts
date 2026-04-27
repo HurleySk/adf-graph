@@ -1,4 +1,5 @@
 import { Graph, EdgeType } from "../graph/model.js";
+import { makeNodeId, parseActivityId } from "../utils/nodeId.js";
 
 export interface ConsumerEntry {
   pipeline: string;
@@ -39,7 +40,7 @@ export function handleFindConsumers(
   target: string,
   targetType: string,
 ): FindConsumersResult {
-  const nodeId = `${targetType}:${target}`;
+  const nodeId = makeNodeId(targetType, target);
   const incoming = graph.getIncoming(nodeId);
 
   const consumers: ConsumerEntry[] = [];
@@ -49,11 +50,7 @@ export function handleFindConsumers(
     if (!fromNode) continue;
 
     if (fromNode.type === "activity") {
-      // Activity IDs are "activity:PipelineName/ActivityName"
-      const idSuffix = edge.from.slice("activity:".length);
-      const slashIdx = idSuffix.indexOf("/");
-      const pipelineName = slashIdx >= 0 ? idSuffix.substring(0, slashIdx) : "unknown";
-      const activityName = slashIdx >= 0 ? idSuffix.substring(slashIdx + 1) : fromNode.name;
+      const { pipeline: pipelineName, activity: activityName } = parseActivityId(edge.from);
       consumers.push({
         pipeline: pipelineName,
         activity: activityName,

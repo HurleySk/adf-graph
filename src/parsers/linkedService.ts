@@ -1,5 +1,5 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../graph/model.js";
-import { ParseResult } from "./pipeline.js";
+import { ParseResult } from "./parseResult.js";
 
 export function parseLinkedServiceFile(json: unknown): ParseResult {
   const nodes: GraphNode[] = [];

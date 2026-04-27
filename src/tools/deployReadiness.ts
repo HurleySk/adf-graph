@@ -1,4 +1,8 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { findExecutePipelineActivities } from "../graph/traversalUtils.js";
+import { parseNodeId } from "../utils/nodeId.js";
+import { lookupPipelineNode } from "./toolUtils.js";
 
 interface DependencyStatus {
   name: string;
@@ -31,19 +35,18 @@ export interface DeployReadinessResult {
 }
 
 export function handleDeployReadiness(graph: Graph, pipeline: string): DeployReadinessResult {
-  const pipelineId = `${NodeType.Pipeline}:${pipeline}`;
-  const pipelineNode = graph.getNode(pipelineId);
-
-  if (!pipelineNode) {
+  const lookup = lookupPipelineNode(graph, pipeline);
+  if (lookup.error !== undefined) {
     return {
       pipeline,
       ready: false,
       dependencies: { pipelines: [], datasets: [], linkedServices: [], tables: [], storedProcedures: [], dataverseEntities: [], keyVaultSecrets: [] },
       parameterIssues: [],
       warnings: [],
-      error: `Pipeline '${pipeline}' not found`,
+      error: lookup.error,
     };
   }
+  const pipelineId = lookup.id;
 
   const deps: Map<string, { referencedBy: string }> = new Map();
   const parameterIssues: ParameterIssue[] = [];
@@ -111,8 +114,8 @@ function checkParameters(
   const node = graph.getNode(pipelineId);
   if (!node) return;
 
-  const paramDefs = node.metadata.parameters as Array<{ name: string; type: string; defaultValue: unknown }> | undefined;
-  if (!paramDefs || !Array.isArray(paramDefs)) return;
+  const paramDefs = getParameterDefs(node);
+  if (paramDefs.length === 0) return;
 
   for (const param of paramDefs) {
     const isSupplied = suppliedParams !== null && param.name in suppliedParams;
@@ -129,17 +132,13 @@ function checkParameters(
   }
 
   // Find ExecutePipeline activities and recurse into child pipelines
-  const containsEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Contains);
   const executesEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Executes);
-
-  const execActivities = containsEdges
-    .map((ce) => graph.getNode(ce.to))
-    .filter((n): n is NonNullable<typeof n> => n !== undefined && n.metadata.activityType === "ExecutePipeline");
+  const execActivities = findExecutePipelineActivities(graph, pipelineId);
 
   for (const execEdge of executesEdges) {
-    const childPipelineName = execEdge.to.split(":")[1];
-    const actNode = execActivities.find((a) => a.metadata.executedPipeline === childPipelineName);
-    const childParams = actNode?.metadata.pipelineParameters as Record<string, unknown> | undefined;
+    const childPipelineName = parseNodeId(execEdge.to).name;
+    const actNode = execActivities.find((a) => getActivityMetadata(a).executedPipeline === childPipelineName);
+    const childParams = actNode ? getActivityMetadata(actNode).pipelineParameters : undefined;
     checkParameters(graph, execEdge.to, childParams ?? null, issues, visited);
   }
 }
@@ -160,13 +159,11 @@ function categorizeDeps(
 
   for (const [id, { referencedBy }] of deps) {
     const node = graph.getNode(id);
-    const name = id.includes(":") ? id.slice(id.indexOf(":") + 1) : id;
+    const { type: prefix, name } = parseNodeId(id);
     const status: DependencyStatus["status"] = node
       ? node.metadata.stub ? "stub" : "present"
       : "missing";
     const entry: DependencyStatus = { name, status, referencedBy };
-
-    const prefix = id.split(":")[0];
     switch (prefix) {
       case "pipeline": result.pipelines.push(entry); break;
       case "dataset": result.datasets.push(entry); break;

@@ -103,4 +103,37 @@ describe("buildGraph", () => {
     expect(secretNode).toBeDefined();
     expect(secretNode!.metadata.stub).toBeUndefined();
   });
+
+  // ── Pass 4b: SP column-level mapping tests ──────────────────────────────
+  it("adds writes_to edges from SP to tables parsed from SQL body", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const spId = "stored_procedure:dbo.p_Transform_Org";
+    const outgoing = graph.getOutgoing(spId);
+    const writesTo = outgoing.filter((e) => e.type === EdgeType.WritesTo);
+    expect(writesTo).toHaveLength(1);
+    expect(writesTo[0].to).toBe("table:dbo.Org_Staging");
+  });
+
+  it("adds maps_column edges on SP nodes from SQL body parsing", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const spId = "stored_procedure:dbo.p_Transform_Org";
+    const outgoing = graph.getOutgoing(spId);
+    const mapsColumn = outgoing.filter((e) => e.type === EdgeType.MapsColumn);
+    expect(mapsColumn.length).toBeGreaterThan(0);
+    // org_type_code with UPPER(LTRIM(RTRIM(...))) transform
+    const orgTypeMapping = mapsColumn.find(
+      (e) => e.metadata.targetColumn === "org_type_code"
+    );
+    expect(orgTypeMapping).toBeDefined();
+    expect(orgTypeMapping!.metadata.sourceColumn).toBe("org_type_code");
+    expect(orgTypeMapping!.metadata.transformExpression).toContain("UPPER");
+  });
+
+  it("stores spConfidence metadata on SP nodes after parsing", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const spNode = graph.getNode("stored_procedure:dbo.p_Transform_Org");
+    expect(spNode).toBeDefined();
+    expect(spNode!.metadata.spConfidence).toBe("high");
+    expect(spNode!.metadata.spMappingCount).toBeGreaterThan(0);
+  });
 });

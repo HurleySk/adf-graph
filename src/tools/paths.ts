@@ -1,4 +1,5 @@
 import { Graph } from "../graph/model.js";
+import { makeNodeId } from "../utils/nodeId.js";
 
 export interface PathEdge {
   from: string;
@@ -30,8 +31,8 @@ export function handleFindPaths(
   fromType?: string,
   toType?: string,
 ): FindPathsResult {
-  const fromId = fromType ? `${fromType}:${from}` : from;
-  const toId = toType ? `${toType}:${to}` : to;
+  const fromId = fromType ? makeNodeId(fromType, from) : from;
+  const toId = toType ? makeNodeId(toType, to) : to;
 
   const rawPaths = graph.findPaths(fromId, toId);
 

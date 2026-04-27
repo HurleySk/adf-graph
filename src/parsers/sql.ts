@@ -1,7 +1,7 @@
 import { readdirSync, statSync, existsSync } from "fs";
 import { join, basename, extname } from "path";
 import { GraphNode, GraphEdge, NodeType } from "../graph/model.js";
-import { ParseResult } from "./pipeline.js";
+import { ParseResult } from "./parseResult.js";
 
 export { ParseResult };
 

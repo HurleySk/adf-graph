@@ -1,4 +1,7 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { parseNodeId } from "../utils/nodeId.js";
+import { lookupPipelineNode } from "./toolUtils.js";
 
 export type DescribeDepth = "summary" | "activities" | "full";
 
@@ -16,11 +19,7 @@ export interface ActivityInfo {
   pipelineParameters?: Record<string, unknown>;
 }
 
-export interface ParameterDef {
-  name: string;
-  type: string;
-  defaultValue: unknown;
-}
+export { ParameterDef } from "../graph/nodeMetadata.js";
 
 export interface PipelineSummary {
   name: string;
@@ -47,22 +46,22 @@ export function handleDescribePipeline(
   pipeline: string,
   depth: DescribeDepth = "summary",
 ): DescribePipelineResult {
-  const pipelineId = `pipeline:${pipeline}`;
-  const pipelineNode = graph.getNode(pipelineId);
-
-  if (!pipelineNode) {
+  const lookup = lookupPipelineNode(graph, pipeline);
+  if (lookup.error !== undefined) {
     return {
       pipeline,
       summary: { name: pipeline, parameters: [], childPipelines: [], rootOrchestrators: [] },
       error: `Pipeline '${pipeline}' not found in graph`,
     };
   }
+  const pipelineId = lookup.id;
+  const pipelineNode = lookup.node;
 
   // Child pipelines: outgoing executes edges
   const outgoing = graph.getOutgoing(pipelineId);
   const childPipelines = outgoing
     .filter((e) => e.type === EdgeType.Executes)
-    .map((e) => e.to.slice("pipeline:".length));
+    .map((e) => parseNodeId(e.to).name);
 
   // Root orchestrators: traverse upstream, find pipelines with no incoming executes
   const upstream = graph.traverseUpstream(pipelineId);
@@ -84,8 +83,7 @@ export function handleDescribePipeline(
     rootOrchestrators.unshift(pipeline);
   }
 
-  // Parameters from metadata
-  const parameters = (pipelineNode.metadata.parameters as ParameterDef[]) ?? [];
+  const parameters = getParameterDefs(pipelineNode);
 
   const summary: PipelineSummary = {
     name: pipeline,
@@ -108,7 +106,7 @@ export function handleDescribePipeline(
     const activityNode = graph.getNode(containsEdge.to);
     if (!activityNode) continue;
 
-    const activityType = (activityNode.metadata.activityType as string) ?? "Unknown";
+    const activityType = getActivityType(activityNode);
 
     // dependsOn: outgoing depends_on edges from this activity
     const actOutgoing = graph.getOutgoing(activityNode.id);
@@ -147,21 +145,12 @@ export function handleDescribePipeline(
       activityInfo.sources = sources;
       activityInfo.sinks = sinks;
       activityInfo.columnMappings = colMappings;
-      if (activityNode.metadata.sqlQuery) {
-        activityInfo.sqlQuery = activityNode.metadata.sqlQuery as string;
-      }
-      if (activityNode.metadata.fetchXmlQuery) {
-        activityInfo.fetchXmlQuery = activityNode.metadata.fetchXmlQuery as string;
-      }
-      if (activityNode.metadata.storedProcedureName) {
-        activityInfo.storedProcedureName = activityNode.metadata.storedProcedureName as string;
-      }
-      if (activityNode.metadata.storedProcedureParameters) {
-        activityInfo.storedProcedureParameters = activityNode.metadata.storedProcedureParameters as Record<string, unknown>;
-      }
-      if (activityNode.metadata.pipelineParameters) {
-        activityInfo.pipelineParameters = activityNode.metadata.pipelineParameters as Record<string, unknown>;
-      }
+      const meta = getActivityMetadata(activityNode);
+      if (meta.sqlQuery) activityInfo.sqlQuery = meta.sqlQuery;
+      if (meta.fetchXmlQuery) activityInfo.fetchXmlQuery = meta.fetchXmlQuery;
+      if (meta.storedProcedureName) activityInfo.storedProcedureName = meta.storedProcedureName;
+      if (meta.storedProcedureParameters) activityInfo.storedProcedureParameters = meta.storedProcedureParameters;
+      if (meta.pipelineParameters) activityInfo.pipelineParameters = meta.pipelineParameters;
     }
 
     activities.push(activityInfo);

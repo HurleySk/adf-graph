@@ -1,8 +1,6 @@
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
-
-/** Directories to watch for changes (relative to rootPath). */
-const WATCHED_DIRS = ["pipeline", "dataset", "linkedService", "SQL DB"];
+import { WATCHED_DIRS } from "../constants.js";
 
 /**
  * Recursively find the maximum mtime (in milliseconds) under a directory.

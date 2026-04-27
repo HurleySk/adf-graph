@@ -1,0 +1,168 @@
+import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { isStub, getParameterDefs } from "../graph/nodeMetadata.js";
+
+export interface ValidationIssue {
+  severity: "error" | "warning";
+  category: string;
+  message: string;
+  nodeId?: string;
+  relatedNodeId?: string;
+}
+
+export interface GraphValidationResult {
+  environment: string;
+  issueCount: { errors: number; warnings: number };
+  issues: ValidationIssue[];
+}
+
+export function handleValidate(
+  graph: Graph,
+  environment: string,
+  severity: "all" | "error" | "warning",
+): GraphValidationResult {
+  const issues: ValidationIssue[] = [];
+
+  // ── Error checks ─────────────────────────────────────────────────────────
+
+  for (const edge of graph.allEdges()) {
+    const targetNode = graph.getNode(edge.to);
+    const targetMissing = !targetNode;
+    const targetStub = targetNode ? isStub(targetNode) : false;
+
+    if (!targetMissing && !targetStub) continue;
+
+    const label = targetMissing ? "missing" : "stub";
+
+    switch (edge.type) {
+      case EdgeType.Executes:
+        if (targetNode?.type === NodeType.Pipeline || (!targetNode && edge.to.startsWith("pipeline:"))) {
+          issues.push({
+            severity: "error",
+            category: "missing_child_pipeline",
+            message: `ExecutePipeline edge points to ${label} pipeline '${edge.to}'`,
+            nodeId: edge.from,
+            relatedNodeId: edge.to,
+          });
+        }
+        break;
+
+      case EdgeType.CallsSp:
+        issues.push({
+          severity: "error",
+          category: "broken_sp_reference",
+          message: `calls_sp edge points to ${label} stored procedure '${edge.to}'`,
+          nodeId: edge.from,
+          relatedNodeId: edge.to,
+        });
+        break;
+
+      case EdgeType.ReadsFrom:
+      case EdgeType.WritesTo:
+        if (targetNode?.type === NodeType.Table || (!targetNode && edge.to.startsWith("table:"))) {
+          issues.push({
+            severity: "error",
+            category: "broken_table_reference",
+            message: `${edge.type} edge points to ${label} table '${edge.to}'`,
+            nodeId: edge.from,
+            relatedNodeId: edge.to,
+          });
+        }
+        break;
+
+      case EdgeType.UsesDataset:
+        issues.push({
+          severity: "error",
+          category: "broken_dataset_reference",
+          message: `uses_dataset edge points to ${label} dataset '${edge.to}'`,
+          nodeId: edge.from,
+          relatedNodeId: edge.to,
+        });
+        break;
+
+      case EdgeType.UsesLinkedService:
+        issues.push({
+          severity: "error",
+          category: "broken_linked_service_reference",
+          message: `uses_linked_service edge points to ${label} linked service '${edge.to}'`,
+          nodeId: edge.from,
+          relatedNodeId: edge.to,
+        });
+        break;
+    }
+  }
+
+  // ── Warning checks ───────────────────────────────────────────────────────
+
+  for (const node of graph.allNodes()) {
+    // 1. empty_param_default: Pipeline params with empty/null/undefined defaults
+    if (node.type === NodeType.Pipeline) {
+      const params = getParameterDefs(node);
+      for (const param of params) {
+        if (param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined) {
+          issues.push({
+            severity: "warning",
+            category: "empty_param_default",
+            message: `Pipeline '${node.name}' parameter '${param.name}' has empty/null default`,
+            nodeId: node.id,
+          });
+        }
+      }
+    }
+
+    // 2. unused_dataset: Dataset nodes with no incoming edges
+    if (node.type === NodeType.Dataset) {
+      const incoming = graph.getIncoming(node.id);
+      if (incoming.length === 0) {
+        issues.push({
+          severity: "warning",
+          category: "unused_dataset",
+          message: `Dataset '${node.name}' has no incoming edges (not referenced by any activity)`,
+          nodeId: node.id,
+        });
+      }
+    }
+
+    // 3. missing_linked_service: Dataset nodes with no uses_linked_service outgoing edge
+    if (node.type === NodeType.Dataset) {
+      const outgoing = graph.getOutgoing(node.id);
+      const hasLsEdge = outgoing.some((e) => e.type === EdgeType.UsesLinkedService);
+      if (!hasLsEdge) {
+        issues.push({
+          severity: "warning",
+          category: "missing_linked_service",
+          message: `Dataset '${node.name}' has no uses_linked_service edge`,
+          nodeId: node.id,
+        });
+      }
+    }
+
+    // 4. orphan_node: Nodes with zero edges in either direction (skip stubs)
+    if (!isStub(node)) {
+      const incoming = graph.getIncoming(node.id);
+      const outgoing = graph.getOutgoing(node.id);
+      if (incoming.length === 0 && outgoing.length === 0) {
+        issues.push({
+          severity: "warning",
+          category: "orphan_node",
+          message: `Node '${node.name}' (${node.type}) has no edges`,
+          nodeId: node.id,
+        });
+      }
+    }
+  }
+
+  // ── Filter by severity ───────────────────────────────────────────────────
+
+  const filtered = severity === "all"
+    ? issues
+    : issues.filter((i) => i.severity === severity);
+
+  const errors = filtered.filter((i) => i.severity === "error").length;
+  const warnings = filtered.filter((i) => i.severity === "warning").length;
+
+  return {
+    environment,
+    issueCount: { errors, warnings },
+    issues: filtered,
+  };
+}

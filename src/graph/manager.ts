@@ -1,10 +1,9 @@
 import { AdfGraphConfig, EnvironmentConfig } from "../config.js";
+import { OVERLAY_SUFFIX } from "../constants.js";
 import { buildGraph } from "./builder.js";
 import { Graph } from "./model.js";
 import { scanOverlayPath, mergeOverlayInto } from "./overlay.js";
 import { StalenessChecker } from "./staleness.js";
-
-const OVERLAY_SUFFIX = "+overlays";
 
 export interface EnvironmentInfo {
   name: string;

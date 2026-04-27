@@ -189,6 +189,14 @@ export class Graph {
     return Array.from(this.nodes.values());
   }
 
+  allEdges(): GraphEdge[] {
+    const edges: GraphEdge[] = [];
+    for (const edgeList of this.outgoing.values()) {
+      edges.push(...edgeList);
+    }
+    return edges;
+  }
+
   // Shallow metadata copy — inner objects (e.g. storedProcedureParameters) are set once at parse time and never mutated.
   clone(): Graph {
     const copy = new Graph();

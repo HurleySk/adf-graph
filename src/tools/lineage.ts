@@ -48,18 +48,6 @@ function pathToSteps(graph: Graph, path: GraphEdge[], direction: LineageDirectio
 }
 
 /**
- * Collect all activity nodes reachable by standard BFS traversal.
- */
-function collectTraversedActivities(graph: Graph, nodeId: string, direction: LineageDirection, maxDepth?: number): string[] {
-  const results = direction === "upstream"
-    ? graph.traverseUpstream(nodeId, maxDepth)
-    : graph.traverseDownstream(nodeId, maxDepth);
-  return results
-    .filter((r) => r.node.id.startsWith("activity:"))
-    .map((r) => r.node.id);
-}
-
-/**
  * Trace data lineage for a Dataverse entity or table using data-flow semantics:
  *
  * Upstream (what feeds this node):
@@ -207,27 +195,37 @@ export function handleDataLineage(
     }
   }
 
-  // Column-level lineage: scan all activity nodes for maps_column edges
+  // Column-level lineage: scan activity and SP nodes for maps_column edges
   const columnMappings: ColumnMapping[] = [];
   if (attribute !== undefined) {
-    // Gather all activities encountered
+    // Gather all activities and stored procedures encountered
     const allActivityIds = new Set<string>();
+    const allSpIds = new Set<string>();
 
     // From paths
     for (const p of paths) {
       for (const step of p.steps) {
         if (step.nodeId.startsWith("activity:")) {
           allActivityIds.add(step.nodeId);
+        } else if (step.nodeId.startsWith("stored_procedure:")) {
+          allSpIds.add(step.nodeId);
         }
       }
     }
 
     // Also from standard traversal
-    const traversedActivityIds = collectTraversedActivities(graph, nodeId, direction, maxDepth);
-    for (const id of traversedActivityIds) {
-      allActivityIds.add(id);
+    const traversalResults = direction === "upstream"
+      ? graph.traverseUpstream(nodeId, maxDepth)
+      : graph.traverseDownstream(nodeId, maxDepth);
+    for (const r of traversalResults) {
+      if (r.node.id.startsWith("activity:")) {
+        allActivityIds.add(r.node.id);
+      } else if (r.node.id.startsWith("stored_procedure:")) {
+        allSpIds.add(r.node.id);
+      }
     }
 
+    // Check activity nodes for maps_column edges (Copy activity mappings)
     for (const actId of allActivityIds) {
       const outgoing = graph.getOutgoing(actId);
       for (const edge of outgoing) {
@@ -239,6 +237,23 @@ export function handleDataLineage(
             activityId: actId,
             sourceColumn,
             sinkColumn,
+          });
+        }
+      }
+    }
+
+    // Check SP nodes for maps_column edges (SP transform mappings)
+    for (const spId of allSpIds) {
+      const outgoing = graph.getOutgoing(spId);
+      for (const edge of outgoing) {
+        if (edge.type !== EdgeType.MapsColumn) continue;
+        const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
+        const targetColumn = (edge.metadata.targetColumn as string | null) ?? null;
+        if (sourceColumn === attribute || targetColumn === attribute) {
+          columnMappings.push({
+            activityId: spId,
+            sourceColumn,
+            sinkColumn: targetColumn,
           });
         }
       }
