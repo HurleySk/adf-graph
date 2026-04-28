@@ -24,11 +24,24 @@ export function parseLinkedServiceFile(json: unknown): ParseResult {
   const typeProperties = properties.typeProperties as Record<string, unknown> | undefined;
   const lsId = `${NodeType.LinkedService}:${name}`;
 
+  const connectionProperties = typeProperties
+    ? extractConnectionProperties(typeProperties)
+    : {};
+
+  const connectVia = properties.connectVia as Record<string, unknown> | undefined;
+  const irName = connectVia?.referenceName as string | undefined;
+  if (irName) {
+    connectionProperties.connectVia = irName;
+  }
+
   nodes.push({
     id: lsId,
     type: NodeType.LinkedService,
     name,
-    metadata: { linkedServiceType: lsType ?? null },
+    metadata: {
+      linkedServiceType: lsType ?? null,
+      ...(Object.keys(connectionProperties).length > 0 ? { connectionProperties } : {}),
+    },
   });
 
   if (typeProperties) {
@@ -36,6 +49,32 @@ export function parseLinkedServiceFile(json: unknown): ParseResult {
   }
 
   return { nodes, edges, warnings };
+}
+
+const CONNECTION_PROPERTY_KEYS = new Set([
+  "serviceUri",
+  "url",
+  "baseUrl",
+  "servicePrincipalId",
+  "tenant",
+  "authenticationType",
+]);
+
+function extractConnectionProperties(
+  typeProperties: Record<string, unknown>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of CONNECTION_PROPERTY_KEYS) {
+    const val = typeProperties[key];
+    if (typeof val === "string") {
+      result[key] = val;
+    }
+  }
+  const cs = typeProperties.connectionString;
+  if (typeof cs === "string") {
+    result.connectionString = cs;
+  }
+  return result;
 }
 
 function extractKeyVaultRefs(

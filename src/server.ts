@@ -23,13 +23,15 @@ import { handleFindOrchestrators } from "./tools/findOrchestrators.js";
 import { handleDiffEnvironments } from "./tools/diffEnvironments.js";
 import { handleValidate } from "./tools/validate.js";
 import { handleEnhancedSearch } from "./tools/enhancedSearch.js";
+import { handleTraceConnection } from "./tools/traceConnection.js";
+import { handleCrossEnvArtifact } from "./tools/crossEnvArtifact.js";
 
 const config = loadConfig();
 const manager = new GraphManager(config);
 
 const server = new McpServer({
   name: "adf-graph",
-  version: "0.8.2",
+  version: "0.9.0",
 });
 
 /** Shared optional environment parameter for all graph tools. */
@@ -198,14 +200,19 @@ server.tool(
 // Tool 9: graph_deploy_readiness
 server.tool(
   "graph_deploy_readiness",
-  "Pre-flight check: walks the full dependency tree of a pipeline and reports what artifacts are present, stub (referenced but no file), or missing in the target environment. Also flags parameters with empty/null defaults that no parent supplies.",
+  "Pre-flight check: walks the full dependency tree of a pipeline and reports what artifacts are present, stub (referenced but no file), or missing in the target environment. Also flags parameters with empty/null defaults that no parent supplies. Optionally compares linked service configuration against another environment.",
   {
     pipeline: z.string().describe("Root pipeline name to check"),
     environment: environmentParam,
+    compare_env: z
+      .string()
+      .optional()
+      .describe("Optional environment name to compare linked service config against (flags serviceUri/credential differences)"),
   },
-  async ({ pipeline, environment }) => {
+  async ({ pipeline, environment, compare_env }) => {
     const build = manager.ensureGraph(environment);
-    const result = handleDeployReadiness(build.graph, pipeline);
+    const compareResult = compare_env ? manager.ensureGraph(compare_env) : undefined;
+    const result = handleDeployReadiness(build.graph, pipeline, compareResult?.graph, compare_env);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );
@@ -370,6 +377,38 @@ server.tool(
   async ({ query, activityType, nodeType, targetEntity, pipeline, detail, environment }) => {
     const build = manager.ensureGraph(environment);
     const result = handleEnhancedSearch(build.graph, query, { activityType, nodeType, targetEntity, pipeline, detail });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 21: graph_trace_connection
+server.tool(
+  "graph_trace_connection",
+  "Trace the full connection chain from a pipeline's activities through datasets, linked services, and credentials. Returns serviceUri, servicePrincipalId, and Key Vault secret references for each connection.",
+  {
+    pipeline: z.string().describe("Pipeline name to trace connections for"),
+    activity: z.string().optional().describe("Optional activity name — traces only that activity's connections"),
+    environment: environmentParam,
+  },
+  async ({ pipeline, activity, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const result = handleTraceConnection(build.graph, pipeline, activity);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 22: graph_cross_env_artifact
+server.tool(
+  "graph_cross_env_artifact",
+  "Compare a single artifact across all registered environments. Shows per-environment metadata with field-level diffs to spot configuration inconsistencies (e.g. different serviceUri across factories).",
+  {
+    name: z.string().describe("Artifact name (e.g. 'LS_ALMDATAVERSEUSER4_USGOVVA_01')"),
+    artifact_type: z
+      .enum(["pipeline", "dataset", "linked_service"])
+      .describe("Type of artifact to compare"),
+  },
+  async ({ name, artifact_type }) => {
+    const result = handleCrossEnvArtifact(manager, name, artifact_type);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );

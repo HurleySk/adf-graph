@@ -1,0 +1,25 @@
+{
+  "name": "ls_dataverse_dev",
+  "properties": {
+    "type": "CommonDataServiceForApps",
+    "typeProperties": {
+      "serviceUri": "https://almdataprod.crm.dynamics.com",
+      "servicePrincipalId": "f9e8d7c6-b5a4-3210-fedc-ba0987654321",
+      "tenant": "contoso.onmicrosoft.com",
+      "authenticationType": "ServicePrincipal",
+      "servicePrincipalCredentialType": "ServicePrincipalKey",
+      "servicePrincipalCredential": {
+        "type": "AzureKeyVaultSecret",
+        "store": {
+          "referenceName": "ls_key_vault",
+          "type": "LinkedServiceReference"
+        },
+        "secretName": "DATAVERSE-SP-SECRET-PROD"
+      }
+    },
+    "connectVia": {
+      "referenceName": "ir-self-hosted",
+      "type": "IntegrationRuntimeReference"
+    }
+  }
+}

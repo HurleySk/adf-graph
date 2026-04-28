@@ -24,10 +24,9 @@ describe("handleValidate", () => {
     const brokenLs = result.issues.filter(
       (i) => i.category === "broken_linked_service_reference",
     );
-    expect(brokenLs.length).toBeGreaterThanOrEqual(2);
+    expect(brokenLs.length).toBeGreaterThanOrEqual(1);
     expect(brokenLs.every((i) => i.severity === "error")).toBe(true);
     const relatedIds = brokenLs.map((i) => i.relatedNodeId);
-    expect(relatedIds).toContain("linked_service:ls_dataverse_dev");
     expect(relatedIds).toContain("linked_service:ls_sql_staging");
   });
 

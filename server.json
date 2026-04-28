@@ -6,12 +6,12 @@
     "url": "https://github.com/HurleySk/adf-graph",
     "source": "github"
   },
-  "version": "0.8.3",
+  "version": "0.9.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "adf-graph",
-      "version": "0.8.3",
+      "version": "0.9.0",
       "transport": {
         "type": "stdio"
       },
@@ -35,7 +35,9 @@
         { "name": "graph_find_orchestrators", "description": "Find root orchestrator pipelines that own a given pipeline with full ancestry chains" },
         { "name": "graph_diff_environments", "description": "Compare pipelines across two environments, showing added/removed/changed artifacts" },
         { "name": "graph_validate", "description": "Graph-wide validation: broken references, empty defaults, unused datasets, orphan nodes" },
-        { "name": "graph_search", "description": "Flexible search with filters for activity type, node type, target entity, and pipeline scope" }
+        { "name": "graph_search", "description": "Flexible search with filters for activity type, node type, target entity, and pipeline scope" },
+        { "name": "graph_trace_connection", "description": "Trace pipeline activities through datasets, linked services, and credentials with full connection metadata" },
+        { "name": "graph_cross_env_artifact", "description": "Compare a single artifact across all environments with field-level diffs" }
       ],
       "environmentVariables": [
         {

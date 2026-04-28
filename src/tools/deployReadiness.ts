@@ -17,6 +17,14 @@ interface ParameterIssue {
   defaultValue?: unknown;
 }
 
+interface LinkedServiceConsistencyIssue {
+  linkedService: string;
+  field: string;
+  currentValue: unknown;
+  compareValue: unknown;
+  compareEnv: string;
+}
+
 export interface DeployReadinessResult {
   pipeline: string;
   ready: boolean;
@@ -30,11 +38,17 @@ export interface DeployReadinessResult {
     keyVaultSecrets: DependencyStatus[];
   };
   parameterIssues: ParameterIssue[];
+  linkedServiceIssues: LinkedServiceConsistencyIssue[];
   warnings: string[];
   error?: string;
 }
 
-export function handleDeployReadiness(graph: Graph, pipeline: string): DeployReadinessResult {
+export function handleDeployReadiness(
+  graph: Graph,
+  pipeline: string,
+  compareGraph?: Graph,
+  compareEnv?: string,
+): DeployReadinessResult {
   const lookup = lookupPipelineNode(graph, pipeline);
   if (lookup.error !== undefined) {
     return {
@@ -42,6 +56,7 @@ export function handleDeployReadiness(graph: Graph, pipeline: string): DeployRea
       ready: false,
       dependencies: { pipelines: [], datasets: [], linkedServices: [], tables: [], storedProcedures: [], dataverseEntities: [], keyVaultSecrets: [] },
       parameterIssues: [],
+      linkedServiceIssues: [],
       warnings: [],
       error: lookup.error,
     };
@@ -61,11 +76,17 @@ export function handleDeployReadiness(graph: Graph, pipeline: string): DeployRea
     list.some((d) => d.status !== "present"),
   );
 
+  const linkedServiceIssues: LinkedServiceConsistencyIssue[] = [];
+  if (compareGraph && compareEnv) {
+    checkLinkedServiceConsistency(graph, compareGraph, compareEnv, deps, linkedServiceIssues);
+  }
+
   return {
     pipeline,
     ready: !hasStubOrMissing && parameterIssues.length === 0,
     dependencies,
     parameterIssues,
+    linkedServiceIssues,
     warnings,
   };
 }
@@ -176,4 +197,43 @@ function categorizeDeps(
   }
 
   return result;
+}
+
+const LS_COMPARISON_FIELDS = [
+  "serviceUri", "url", "baseUrl", "servicePrincipalId", "tenant", "connectionString", "connectVia",
+];
+
+function checkLinkedServiceConsistency(
+  graph: Graph,
+  compareGraph: Graph,
+  compareEnv: string,
+  deps: Map<string, { referencedBy: string }>,
+  issues: LinkedServiceConsistencyIssue[],
+): void {
+  for (const [id] of deps) {
+    const { type: prefix, name } = parseNodeId(id);
+    if (prefix !== "linked_service") continue;
+
+    const nodeA = graph.getNode(id);
+    const nodeB = compareGraph.getNode(id);
+    if (!nodeA || !nodeB) continue;
+
+    const cpA = (nodeA.metadata.connectionProperties ?? {}) as Record<string, unknown>;
+    const cpB = (nodeB.metadata.connectionProperties ?? {}) as Record<string, unknown>;
+
+    for (const field of LS_COMPARISON_FIELDS) {
+      const valA = cpA[field];
+      const valB = cpB[field];
+      if (valA === undefined && valB === undefined) continue;
+      if (JSON.stringify(valA) !== JSON.stringify(valB)) {
+        issues.push({
+          linkedService: name,
+          field,
+          currentValue: valA ?? null,
+          compareValue: valB ?? null,
+          compareEnv,
+        });
+      }
+    }
+  }
 }

@@ -32,10 +32,20 @@ describe("handleFindConsumers", () => {
     expect(caller).toBeDefined();
   });
 
+  it("finds datasets that use a linked service", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleFindConsumers(graph, "ls_dataverse_dev", "linked_service");
+    expect(result.datasetConsumers.length).toBeGreaterThan(0);
+    const ds = result.datasetConsumers.find((d) => d.dataset === "ds_dataverse");
+    expect(ds).toBeDefined();
+    expect(ds!.usage).toBe("uses");
+  });
+
   it("returns empty consumers for an unknown target", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleFindConsumers(graph, "nonexistent_entity", "dataverse_entity");
     expect(result.consumers).toEqual([]);
+    expect(result.datasetConsumers).toEqual([]);
     expect(result.nodeId).toBe("dataverse_entity:nonexistent_entity");
   });
 });

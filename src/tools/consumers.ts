@@ -7,11 +7,17 @@ export interface ConsumerEntry {
   usage: "reads" | "writes" | "calls" | "uses";
 }
 
+export interface DatasetConsumerEntry {
+  dataset: string;
+  usage: "uses";
+}
+
 export interface FindConsumersResult {
   target: string;
   targetType: string;
   nodeId: string;
   consumers: ConsumerEntry[];
+  datasetConsumers: DatasetConsumerEntry[];
 }
 
 /**
@@ -44,6 +50,7 @@ export function handleFindConsumers(
   const incoming = graph.getIncoming(nodeId);
 
   const consumers: ConsumerEntry[] = [];
+  const datasetConsumers: DatasetConsumerEntry[] = [];
 
   for (const edge of incoming) {
     const fromNode = graph.getNode(edge.from);
@@ -62,6 +69,11 @@ export function handleFindConsumers(
         activity: "(pipeline-level)",
         usage: usageFromEdgeType(edge.type),
       });
+    } else if (fromNode.type === "dataset") {
+      datasetConsumers.push({
+        dataset: fromNode.name,
+        usage: "uses",
+      });
     }
   }
 
@@ -70,5 +82,6 @@ export function handleFindConsumers(
     targetType,
     nodeId,
     consumers,
+    datasetConsumers,
   };
 }

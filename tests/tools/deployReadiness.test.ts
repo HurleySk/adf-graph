@@ -67,4 +67,24 @@ describe("handleDeployReadiness", () => {
     const sps = result.dependencies.storedProcedures;
     expect(sps.map((d) => d.name)).toContain("dbo.p_Transform_Org");
   });
+
+  it("returns empty linkedServiceIssues when no compare_env provided", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDeployReadiness(graph, "Test_Orchestrator");
+    expect(result.linkedServiceIssues).toEqual([]);
+  });
+
+  it("flags linked service config differences against compare environment", () => {
+    const fixtureEnv2 = join(import.meta.dirname, "../fixtures-env2");
+    const graphA = buildGraph(fixtureRoot).graph;
+    const graphB = buildGraph(fixtureEnv2).graph;
+    const result = handleDeployReadiness(graphA, "Copy_To_Dataverse", graphB, "prod");
+    const uriIssue = result.linkedServiceIssues.find(
+      (i) => i.linkedService === "ls_dataverse_dev" && i.field === "serviceUri"
+    );
+    expect(uriIssue).toBeDefined();
+    expect(uriIssue!.currentValue).toBe("https://almdatadev.crm.dynamics.com");
+    expect(uriIssue!.compareValue).toBe("https://almdataprod.crm.dynamics.com");
+    expect(uriIssue!.compareEnv).toBe("prod");
+  });
 });
