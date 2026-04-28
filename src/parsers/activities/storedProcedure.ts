@@ -19,8 +19,10 @@ export function parseStoredProcedureActivity(
   const activityId = activityNode.id;
   const typeProperties = activity.typeProperties as Record<string, unknown> | undefined;
 
-  const spName = typeProperties?.storedProcedureName as string | undefined;
-  if (spName) {
+  const rawSpName = typeProperties?.storedProcedureName;
+  const spName = typeof rawSpName === "string" ? rawSpName
+    : (rawSpName as Record<string, unknown> | undefined)?.value as string | undefined;
+  if (typeof spName === "string") {
     const normalized = normalizeSpName(spName);
     edges.push({
       from: activityId,
