@@ -1,5 +1,6 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { extractTablesFromSql } from "../parseResult.js";
+import { asString } from "../../utils/expressionValue.js";
 
 /**
  * Process dataset parameters to create reads_from/writes_to edges for
@@ -58,7 +59,8 @@ export function parseCopyActivity(
   // inputs -> uses_dataset (reads)
   for (const inp of inputs) {
     const i = inp as Record<string, unknown>;
-    const refName = i.referenceName as string;
+    const refName = asString(i.referenceName);
+    if (!refName) continue;
     edges.push({
       from: activityId,
       to: `${NodeType.Dataset}:${refName}`,
@@ -75,7 +77,8 @@ export function parseCopyActivity(
   // outputs -> uses_dataset (writes)
   for (const out of outputs) {
     const o = out as Record<string, unknown>;
-    const refName = o.referenceName as string;
+    const refName = asString(o.referenceName);
+    if (!refName) continue;
     edges.push({
       from: activityId,
       to: `${NodeType.Dataset}:${refName}`,

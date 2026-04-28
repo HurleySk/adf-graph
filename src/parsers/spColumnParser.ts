@@ -30,7 +30,8 @@ export interface SpParseResult {
 /* ──────────────────────────── helpers ──────────────────────────── */
 
 /** Strip square brackets and optional schema prefix whitespace. */
-function normalizeName(raw: string): string {
+function normalizeName(raw: unknown): string {
+  if (typeof raw !== "string") return "";
   return raw.replace(/\[|\]/g, "").trim();
 }
 

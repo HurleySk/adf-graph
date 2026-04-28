@@ -1,4 +1,5 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
+import { asString } from "../../utils/expressionValue.js";
 
 function normalizeSpName(raw: string): string {
   // [dbo].[p_Transform_Org] -> dbo.p_Transform_Org
@@ -19,10 +20,8 @@ export function parseStoredProcedureActivity(
   const activityId = activityNode.id;
   const typeProperties = activity.typeProperties as Record<string, unknown> | undefined;
 
-  const rawSpName = typeProperties?.storedProcedureName;
-  const spName = typeof rawSpName === "string" ? rawSpName
-    : (rawSpName as Record<string, unknown> | undefined)?.value as string | undefined;
-  if (typeof spName === "string") {
+  const spName = asString(typeProperties?.storedProcedureName);
+  if (spName) {
     const normalized = normalizeSpName(spName);
     edges.push({
       from: activityId,

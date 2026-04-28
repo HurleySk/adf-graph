@@ -1,6 +1,7 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { ActivityContext } from "./base.js";
 import { extractTablesFromSql } from "../parseResult.js";
+import { asString } from "../../utils/expressionValue.js";
 
 /**
  * Handle ExecutePipeline-specific logic:
@@ -20,7 +21,7 @@ export function parseExecutePipeline(
   const typeProperties = activity.typeProperties as Record<string, unknown> | undefined;
 
   const refPipeline = typeProperties?.pipeline as Record<string, unknown> | undefined;
-  const refName = refPipeline?.referenceName as string | undefined;
+  const refName = asString(refPipeline?.referenceName);
   if (refName) {
     if (refName.startsWith("@")) {
       warnings.push(`Dynamic pipeline reference in activity '${activityName}': ${refName}`);
