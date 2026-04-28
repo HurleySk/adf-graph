@@ -1,4 +1,4 @@
-import { Graph, EdgeType, NodeType } from "../graph/model.js";
+import { Graph, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode } from "./toolUtils.js";
 import { parseActivityId } from "../utils/nodeId.js";
 
@@ -33,23 +33,69 @@ export function handleTraceConnection(
     return { pipeline, activity, chains: [], error: lookup.error };
   }
 
-  const pipelineId = lookup.id;
-  const containsEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Contains);
-
   const chains: ConnectionChain[] = [];
+  const visitedPipelines = new Set<string>([lookup.id]);
 
-  for (const containsEdge of containsEdges) {
-    const actNode = graph.getNode(containsEdge.to);
+  collectChains(graph, lookup.id, pipeline, activity, chains, visitedPipelines);
+
+  if (activity && chains.length === 0) {
+    return { pipeline, activity, chains: [], error: `Activity '${activity}' not found in pipeline '${pipeline}'` };
+  }
+
+  return { pipeline, activity, chains };
+}
+
+function collectChains(
+  graph: Graph,
+  pipelineId: string,
+  pipelineName: string,
+  activityFilter: string | undefined,
+  chains: ConnectionChain[],
+  visitedPipelines: Set<string>,
+): void {
+  const visited = new Set<string>();
+  walkActivities(graph, pipelineId, pipelineName, activityFilter, chains, visited);
+
+  // Follow ExecutePipeline edges (Executes edges are from pipeline, not activity)
+  for (const edge of graph.getOutgoing(pipelineId)) {
+    if (edge.type !== EdgeType.Executes) continue;
+    if (visitedPipelines.has(edge.to)) continue;
+    visitedPipelines.add(edge.to);
+
+    const childNode = graph.getNode(edge.to);
+    if (!childNode) continue;
+    collectChains(graph, edge.to, childNode.name, undefined, chains, visitedPipelines);
+  }
+}
+
+function walkActivities(
+  graph: Graph,
+  nodeId: string,
+  pipelineName: string,
+  activityFilter: string | undefined,
+  chains: ConnectionChain[],
+  visited: Set<string>,
+): void {
+  for (const edge of graph.getOutgoing(nodeId)) {
+    if (edge.type !== EdgeType.Contains) continue;
+    if (visited.has(edge.to)) continue;
+    visited.add(edge.to);
+
+    const actNode = graph.getNode(edge.to);
     if (!actNode) continue;
 
+    // Recurse into container activities (Until, ForEach, IfCondition, Switch)
+    walkActivities(graph, actNode.id, pipelineName, activityFilter, chains, visited);
+
     const { activity: actName } = parseActivityId(actNode.id);
-    if (activity && actName !== activity) continue;
+    if (activityFilter && actName !== activityFilter) continue;
 
     const actType = (actNode.metadata.activityType as string) ?? "unknown";
     const steps: ConnectionChainStep[] = [];
 
-    const datasetEdges = graph.getOutgoing(actNode.id).filter((e) => e.type === EdgeType.UsesDataset);
-    for (const dsEdge of datasetEdges) {
+    // Dataset → LinkedService → Secret chains
+    for (const dsEdge of graph.getOutgoing(actNode.id)) {
+      if (dsEdge.type !== EdgeType.UsesDataset) continue;
       const dsNode = graph.getNode(dsEdge.to);
       if (!dsNode) continue;
 
@@ -60,27 +106,22 @@ export function handleTraceConnection(
         metadata: dsNode.metadata,
       });
 
-      const lsEdges = graph.getOutgoing(dsNode.id).filter((e) => e.type === EdgeType.UsesLinkedService);
-      for (const lsEdge of lsEdges) {
+      for (const lsEdge of graph.getOutgoing(dsNode.id)) {
+        if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
         appendLinkedServiceChain(graph, lsEdge.to, lsEdge.type, steps);
       }
     }
 
-    const directLsEdges = graph.getOutgoing(actNode.id).filter((e) => e.type === EdgeType.UsesLinkedService);
-    for (const lsEdge of directLsEdges) {
+    // Direct activity → LinkedService edges (e.g., SqlServerStoredProcedure)
+    for (const lsEdge of graph.getOutgoing(actNode.id)) {
+      if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
       appendLinkedServiceChain(graph, lsEdge.to, lsEdge.type, steps);
     }
 
     if (steps.length > 0) {
-      chains.push({ pipeline, activity: actName, activityType: actType, steps });
+      chains.push({ pipeline: pipelineName, activity: actName, activityType: actType, steps });
     }
   }
-
-  if (activity && chains.length === 0) {
-    return { pipeline, activity, chains: [], error: `Activity '${activity}' not found in pipeline '${pipeline}'` };
-  }
-
-  return { pipeline, activity, chains };
 }
 
 function appendLinkedServiceChain(
@@ -99,8 +140,8 @@ function appendLinkedServiceChain(
     metadata: lsNode.metadata,
   });
 
-  const secretEdges = graph.getOutgoing(lsNodeId).filter((e) => e.type === EdgeType.ReferencesSecret);
-  for (const secEdge of secretEdges) {
+  for (const secEdge of graph.getOutgoing(lsNodeId)) {
+    if (secEdge.type !== EdgeType.ReferencesSecret) continue;
     const secNode = graph.getNode(secEdge.to);
     if (!secNode) continue;
     steps.push({
@@ -111,8 +152,8 @@ function appendLinkedServiceChain(
     });
   }
 
-  const vaultEdges = graph.getOutgoing(lsNodeId).filter((e) => e.type === EdgeType.UsesLinkedService);
-  for (const vaultEdge of vaultEdges) {
+  for (const vaultEdge of graph.getOutgoing(lsNodeId)) {
+    if (vaultEdge.type !== EdgeType.UsesLinkedService) continue;
     const vaultNode = graph.getNode(vaultEdge.to);
     if (!vaultNode) continue;
     steps.push({

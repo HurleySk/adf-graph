@@ -10,7 +10,6 @@ import { handleDescribePipeline } from "./tools/describe.js";
 import { handleImpactAnalysis } from "./tools/impact.js";
 import { handleDataLineage } from "./tools/lineage.js";
 import { handleFindPaths } from "./tools/paths.js";
-import { handleSearchQueries } from "./tools/search.js";
 import { handleDiffPipeline } from "./tools/diff.js";
 import { handleAddOverlay } from "./tools/addOverlay.js";
 import { handleRemoveOverlay } from "./tools/removeOverlay.js";
@@ -165,22 +164,7 @@ server.tool(
   },
 );
 
-// Tool 7: graph_search_queries
-server.tool(
-  "graph_search_queries",
-  "Search across activity SQL, FetchXML, stored procedure names/parameters, and ExecutePipeline parameter values for a text pattern (case-insensitive).",
-  {
-    query: z.string().min(1).describe("Text to search for (case-insensitive substring match)"),
-    environment: environmentParam,
-  },
-  async ({ query, environment }) => {
-    const build = manager.ensureGraph(environment);
-    const result = handleSearchQueries(build.graph, query);
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-  },
-);
-
-// Tool 8: graph_diff_pipeline
+// Tool 7: graph_diff_pipeline
 server.tool(
   "graph_diff_pipeline",
   "Compare a pipeline's structure across two environments. Shows added/removed/modified activities, SQL changes, and column mapping differences.",
@@ -364,7 +348,7 @@ server.tool(
 // Tool 20: graph_search
 server.tool(
   "graph_search",
-  "Flexible search across the graph with optional filters for activity type, node type, target entity, and pipeline scope. Supports summary and full detail modes.",
+  "Flexible search across the graph: node names, activity SQL, FetchXML, stored procedure names/parameters, and ExecutePipeline parameter values. Supports filters for activity type, node type, target entity, and pipeline scope.",
   {
     query: z.string().min(1).describe("Search text (case-insensitive substring match)"),
     activityType: z.string().optional().describe("Filter to activities of this type (e.g. 'Copy', 'ExecutePipeline')"),

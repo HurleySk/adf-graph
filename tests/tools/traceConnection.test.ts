@@ -77,4 +77,45 @@ describe("handleTraceConnection", () => {
     expect(secretStep).toBeDefined();
     expect(secretStep!.name).toBe("DATAVERSE-SP-SECRET");
   });
+
+  it("traces nested Copy inside Until container", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleTraceConnection(graph, "Pipeline_With_Containers");
+    expect(result.error).toBeUndefined();
+
+    const copyBatch = result.chains.find((c) => c.activity === "Batch Upsert Loop/Copy Batch");
+    expect(copyBatch).toBeDefined();
+    expect(copyBatch!.activityType).toBe("Copy");
+    const dsNames = copyBatch!.steps.filter((s) => s.nodeType === "dataset").map((s) => s.name);
+    expect(dsNames).toContain("ds_sql_staging");
+    expect(dsNames).toContain("ds_dataverse");
+  });
+
+  it("traces nested Copy inside IfCondition false branch", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleTraceConnection(graph, "Pipeline_With_Containers");
+
+    const logCopy = result.chains.find((c) => c.activity === "Check Results/Log No Results");
+    expect(logCopy).toBeDefined();
+    expect(logCopy!.activityType).toBe("Copy");
+  });
+
+  it("traces nested Copy inside ForEach container", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleTraceConnection(graph, "Pipeline_With_Containers");
+
+    const regionCopy = result.chains.find((c) => c.activity === "Process Each Region/Copy Region Data");
+    expect(regionCopy).toBeDefined();
+    expect(regionCopy!.activityType).toBe("Copy");
+  });
+
+  it("follows ExecutePipeline into child pipelines", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleTraceConnection(graph, "Test_Orchestrator");
+    expect(result.error).toBeUndefined();
+    expect(result.chains.length).toBeGreaterThan(0);
+
+    const childPipelines = new Set(result.chains.map((c) => c.pipeline));
+    expect(childPipelines.has("Copy_To_Staging") || childPipelines.has("Copy_To_Dataverse")).toBe(true);
+  });
 });

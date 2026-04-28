@@ -1,4 +1,5 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { CONNECTION_PROPERTY_KEYS } from "../utils/connectionProperties.js";
 import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { findExecutePipelineActivities } from "../graph/traversalUtils.js";
 import { parseNodeId } from "../utils/nodeId.js";
@@ -199,10 +200,6 @@ function categorizeDeps(
   return result;
 }
 
-const LS_COMPARISON_FIELDS = [
-  "serviceUri", "url", "baseUrl", "servicePrincipalId", "tenant", "connectionString", "connectVia",
-];
-
 function checkLinkedServiceConsistency(
   graph: Graph,
   compareGraph: Graph,
@@ -221,7 +218,7 @@ function checkLinkedServiceConsistency(
     const cpA = (nodeA.metadata.connectionProperties ?? {}) as Record<string, unknown>;
     const cpB = (nodeB.metadata.connectionProperties ?? {}) as Record<string, unknown>;
 
-    for (const field of LS_COMPARISON_FIELDS) {
+    for (const field of CONNECTION_PROPERTY_KEYS) {
       const valA = cpA[field];
       const valB = cpB[field];
       if (valA === undefined && valB === undefined) continue;

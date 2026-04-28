@@ -1,5 +1,6 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../graph/model.js";
 import { ParseResult } from "./parseResult.js";
+import { CONNECTION_PROPERTY_KEYS } from "../utils/connectionProperties.js";
 
 export function parseLinkedServiceFile(json: unknown): ParseResult {
   const nodes: GraphNode[] = [];
@@ -51,20 +52,12 @@ export function parseLinkedServiceFile(json: unknown): ParseResult {
   return { nodes, edges, warnings };
 }
 
-const CONNECTION_PROPERTY_KEYS = new Set([
-  "serviceUri",
-  "url",
-  "baseUrl",
-  "servicePrincipalId",
-  "tenant",
-  "authenticationType",
-]);
-
 function extractConnectionProperties(
   typeProperties: Record<string, unknown>,
 ): Record<string, string> {
   const result: Record<string, string> = {};
   for (const key of CONNECTION_PROPERTY_KEYS) {
+    if (key === "connectionString" || key === "connectVia") continue;
     const val = typeProperties[key];
     if (typeof val === "string") {
       result[key] = val;

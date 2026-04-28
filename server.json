@@ -22,7 +22,6 @@
         { "name": "graph_impact_analysis", "description": "All nodes affected upstream/downstream if an artifact changes" },
         { "name": "graph_data_lineage", "description": "Data flow paths for a Dataverse entity or staging table with optional column filter. SP column mappings include source/target table and transform expressions." },
         { "name": "graph_find_paths", "description": "All dependency paths between two named nodes" },
-        { "name": "graph_search_queries", "description": "Search across activity SQL, FetchXML, stored procedure names/parameters, and ExecutePipeline parameter values" },
         { "name": "graph_diff_pipeline", "description": "Compare a pipeline's structure across two environments with line-level SQL diffs" },
         { "name": "graph_deploy_readiness", "description": "Pre-flight dependency check for a pipeline in a target environment" },
         { "name": "graph_trace_parameters", "description": "Trace parameter flow through ExecutePipeline chains, flag dead-end parameters" },
@@ -35,7 +34,7 @@
         { "name": "graph_find_orchestrators", "description": "Find root orchestrator pipelines that own a given pipeline with full ancestry chains" },
         { "name": "graph_diff_environments", "description": "Compare pipelines across two environments, showing added/removed/changed artifacts" },
         { "name": "graph_validate", "description": "Graph-wide validation: broken references, empty defaults, unused datasets, orphan nodes" },
-        { "name": "graph_search", "description": "Flexible search with filters for activity type, node type, target entity, and pipeline scope" },
+        { "name": "graph_search", "description": "Flexible search: node names, activity SQL, FetchXML, SP names/parameters. Supports filters for activity type, node type, target entity, and pipeline scope" },
         { "name": "graph_trace_connection", "description": "Trace pipeline activities through datasets, linked services, and credentials with full connection metadata" },
         { "name": "graph_cross_env_artifact", "description": "Compare a single artifact across all environments with field-level diffs" }
       ],
