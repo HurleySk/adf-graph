@@ -242,6 +242,41 @@ describe("parsePipelineFile", () => {
     expect(spEdges).toHaveLength(1);
     expect(spEdges[0].to).toBe("stored_procedure:dbo.p_Transform_Org");
   });
+
+  it("handles Expression-type storedProcedureName without crashing", () => {
+    const pipeline = {
+      name: "Pipeline_With_Expression_SP",
+      properties: {
+        activities: [
+          {
+            name: "Copy Data",
+            type: "Copy",
+            dependsOn: [],
+            typeProperties: { source: { type: "AzureSqlSource" }, sink: { type: "AzureSqlSink" } },
+            inputs: [{ referenceName: "ds_sql_source", type: "DatasetReference" }],
+            outputs: [{ referenceName: "ds_sql_staging", type: "DatasetReference", parameters: { schema_name: "dbo", table_name: "Out" } }],
+          },
+          {
+            name: "Run Dynamic SP",
+            type: "SqlServerStoredProcedure",
+            dependsOn: [{ activity: "Copy Data", dependencyConditions: ["Succeeded"] }],
+            typeProperties: {
+              storedProcedureName: { value: "@pipeline().parameters.sp_name", type: "Expression" },
+            },
+          },
+        ],
+      },
+    };
+    const result = parsePipelineFile(pipeline);
+    expect(result.nodes.length).toBeGreaterThanOrEqual(3);
+    const copyNode = result.nodes.find((n) => n.name === "Copy Data");
+    expect(copyNode).toBeDefined();
+    const spNode = result.nodes.find((n) => n.name === "Run Dynamic SP");
+    expect(spNode).toBeDefined();
+    const spEdge = result.edges.find((e) => e.type === "calls_sp" && e.from === spNode!.id);
+    expect(spEdge).toBeDefined();
+    expect(spEdge!.to).toContain("pipeline().parameters.sp_name");
+  });
 });
 
 describe("extractTablesFromSql", () => {

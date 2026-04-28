@@ -94,16 +94,7 @@ export function parseCopyActivity(
 
   // SQL reader query -> reads_from table
   const source = typeProperties?.source as Record<string, unknown> | undefined;
-  const sqlQuery = source?.sqlReaderQuery;
-  let sqlText: string | null = null;
-  if (typeof sqlQuery === "string") {
-    sqlText = sqlQuery;
-  } else if (sqlQuery && typeof sqlQuery === "object") {
-    const q = sqlQuery as Record<string, unknown>;
-    if (q.type === "Expression" && typeof q.value === "string") {
-      sqlText = q.value;
-    }
-  }
+  const sqlText = asString(source?.sqlReaderQuery) ?? null;
   if (sqlText) {
     const tables = extractTablesFromSql(sqlText);
     for (const tbl of tables) {

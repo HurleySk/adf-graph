@@ -41,16 +41,7 @@ export function parseExecutePipeline(
     activityNode.metadata.pipelineParameters = execParams;
 
     // Extract source tables from source_query parameter
-    const sourceQuery = execParams.source_query;
-    let sqlText: string | null = null;
-    if (typeof sourceQuery === "string") {
-      sqlText = sourceQuery;
-    } else if (sourceQuery && typeof sourceQuery === "object") {
-      const q = sourceQuery as Record<string, unknown>;
-      if (q.type === "Expression" && typeof q.value === "string") {
-        sqlText = q.value;
-      }
-    }
+    const sqlText = asString(execParams.source_query) ?? null;
     if (sqlText) {
       const tables = extractTablesFromSql(sqlText);
       for (const tbl of tables) {

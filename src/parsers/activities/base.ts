@@ -1,4 +1,5 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
+import { asString } from "../../utils/expressionValue.js";
 
 export interface ActivityContext {
   pipelineId: string;
@@ -58,9 +59,8 @@ export function parseBaseActivity(
     });
   }
 
-  // Activity-level linked service reference (SqlServerStoredProcedure, Lookup, etc.)
   const linkedServiceRef = activity.linkedServiceName as Record<string, unknown> | undefined;
-  const lsName = linkedServiceRef?.referenceName as string | undefined;
+  const lsName = asString(linkedServiceRef?.referenceName);
   if (lsName) {
     edges.push({
       from: activityId,
