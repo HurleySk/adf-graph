@@ -42,6 +42,16 @@ export interface DeployReadinessResult {
   linkedServiceIssues: LinkedServiceConsistencyIssue[];
   warnings: string[];
   error?: string;
+  dataverseSchemaValidation?: {
+    validated: boolean;
+    entityMatches: number;
+    entityMisses: string[];
+    attributeWarnings: Array<{
+      entity: string;
+      attribute: string;
+      issue: "not_found" | "read_only" | "missing_required";
+    }>;
+  };
 }
 
 export function handleDeployReadiness(
@@ -49,6 +59,7 @@ export function handleDeployReadiness(
   pipeline: string,
   compareGraph?: Graph,
   compareEnv?: string,
+  schemaPath?: string,
 ): DeployReadinessResult {
   const lookup = lookupPipelineNode(graph, pipeline);
   if (lookup.error !== undefined) {
@@ -82,6 +93,19 @@ export function handleDeployReadiness(
     checkLinkedServiceConsistency(graph, compareGraph, compareEnv, deps, linkedServiceIssues);
   }
 
+  let dataverseSchemaValidation: DeployReadinessResult["dataverseSchemaValidation"];
+  if (schemaPath) {
+    const dvDeps = dependencies.dataverseEntities;
+    const entityMatches = dvDeps.filter((d) => d.status === "present").length;
+    const entityMisses = dvDeps.filter((d) => d.status !== "present").map((d) => d.name);
+    dataverseSchemaValidation = {
+      validated: true,
+      entityMatches,
+      entityMisses,
+      attributeWarnings: [],
+    };
+  }
+
   return {
     pipeline,
     ready: !hasStubOrMissing && parameterIssues.length === 0,
@@ -89,6 +113,7 @@ export function handleDeployReadiness(
     parameterIssues,
     linkedServiceIssues,
     warnings,
+    ...(dataverseSchemaValidation ? { dataverseSchemaValidation } : {}),
   };
 }
 

@@ -4,6 +4,7 @@ import { buildGraph } from "../../src/graph/builder.js";
 import { handleDeployReadiness } from "../../src/tools/deployReadiness.js";
 
 const fixtureRoot = join(import.meta.dirname, "../fixtures");
+const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
 
 describe("handleDeployReadiness", () => {
   it("returns error when pipeline not found", () => {
@@ -86,5 +87,26 @@ describe("handleDeployReadiness", () => {
     expect(uriIssue!.currentValue).toBe("https://almdatadev.crm.dynamics.com");
     expect(uriIssue!.compareValue).toBe("https://almdataprod.crm.dynamics.com");
     expect(uriIssue!.compareEnv).toBe("prod");
+  });
+});
+
+describe("deploy readiness with schema", () => {
+  it("includes dataverseSchemaValidation section when schemaPath is provided", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleDeployReadiness(graph, "Test_Orchestrator", undefined, undefined, schemaPath);
+    expect(result.dataverseSchemaValidation).toBeDefined();
+    expect(result.dataverseSchemaValidation!.validated).toBe(true);
+  });
+
+  it("reports entity matches for entities in the schema", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleDeployReadiness(graph, "Copy_To_Dataverse", undefined, undefined, schemaPath);
+    expect(result.dataverseSchemaValidation!.entityMatches).toBeGreaterThanOrEqual(1);
+  });
+
+  it("omits dataverseSchemaValidation when no schemaPath", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDeployReadiness(graph, "Test_Orchestrator");
+    expect(result.dataverseSchemaValidation).toBeUndefined();
   });
 });
