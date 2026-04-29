@@ -10,6 +10,7 @@ import { parseDatasetFile } from "../parsers/dataset.js";
 import { parseLinkedServiceFile } from "../parsers/linkedService.js";
 import { scanSqlDirectory } from "../parsers/sql.js";
 import { parseSpBody } from "../parsers/spColumnParser.js";
+import { parseSchemaIndex } from "../parsers/dataverseSchema.js";
 
 export interface BuildResult {
   graph: Graph;
@@ -123,9 +124,10 @@ function extractPipelineColumnMappings(_filePath: string, json: unknown, graph: 
  * Pass 2 — Datasets:         reads dataset/*.json
  * Pass 3 — Linked Services:  reads linkedService/*.json
  * Pass 4 — SQL:              scans each subdirectory under "SQL DB/"
- * Pass 5 — Stubs:            creates stub nodes for any referenced IDs with no node
+ * Pass 5 — Dataverse Schema: enriches/replaces stub entity nodes from schema index
+ * Pass 6 — Stubs:            creates stub nodes for any referenced IDs with no node
  */
-export function buildGraph(rootPath: string): BuildResult {
+export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
   const start = Date.now();
   const graph = new Graph();
   const warnings: string[] = [];
@@ -230,7 +232,24 @@ export function buildGraph(rootPath: string): BuildResult {
     }
   }
 
-  // ── Pass 5: Stub nodes ────────────────────────────────────────────────────
+  // ── Pass 5: Dataverse Schema ─────────────────────────────────────────────
+  if (schemaPath) {
+    const schemaResult = parseSchemaIndex(schemaPath);
+    warnings.push(...schemaResult.warnings);
+    for (const node of schemaResult.nodes) {
+      const existing = graph.getNode(node.id);
+      if (existing && existing.metadata.stub) {
+        graph.replaceNode(node);
+      } else if (!existing) {
+        graph.addNode(node);
+      }
+    }
+    for (const edge of schemaResult.edges) {
+      graph.addEdge(edge);
+    }
+  }
+
+  // ── Pass 6: Stub nodes ────────────────────────────────────────────────────
   const referencedIds = graph.getAllReferencedIds();
   for (const id of referencedIds) {
     if (!graph.getNode(id)) {

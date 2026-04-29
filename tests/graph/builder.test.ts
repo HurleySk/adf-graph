@@ -137,3 +137,42 @@ describe("buildGraph", () => {
     expect(spNode!.metadata.spMappingCount).toBeGreaterThan(0);
   });
 });
+
+const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
+
+describe("buildGraph with schemaPath", () => {
+  it("creates DataverseEntity nodes from schema index", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const entities = graph.getNodesByType(NodeType.DataverseEntity);
+    expect(entities.some((n) => n.name === "alm_organization")).toBe(true);
+    expect(entities.some((n) => n.name === "businessunit")).toBe(true);
+  });
+
+  it("creates DataverseAttribute nodes from schema index", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const attrs = graph.getNodesByType(NodeType.DataverseAttribute);
+    expect(attrs.some((n) => n.id === "dataverse_attribute:alm_organization.alm_name")).toBe(true);
+  });
+
+  it("replaces stub entity nodes with schema-enriched nodes", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const orgEntity = graph.getNode("dataverse_entity:alm_organization");
+    expect(orgEntity).toBeDefined();
+    expect(orgEntity!.metadata.stub).toBeFalsy();
+    expect(orgEntity!.metadata.displayName).toBe("Organization");
+    expect(orgEntity!.metadata.entitySetName).toBe("alm_organizations");
+  });
+
+  it("creates HasAttribute edges from entity to attributes", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const outgoing = graph.getOutgoing("dataverse_entity:alm_organization");
+    const hasAttr = outgoing.filter((e) => e.type === EdgeType.HasAttribute);
+    expect(hasAttr.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("builds normally without schemaPath", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const attrs = graph.getNodesByType(NodeType.DataverseAttribute);
+    expect(attrs).toHaveLength(0);
+  });
+});
