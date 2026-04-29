@@ -24,6 +24,7 @@ import { handleValidate } from "./tools/validate.js";
 import { handleEnhancedSearch } from "./tools/enhancedSearch.js";
 import { handleTraceConnection } from "./tools/traceConnection.js";
 import { handleCrossEnvArtifact } from "./tools/crossEnvArtifact.js";
+import { handleDescribeEntity } from "./tools/describeEntity.js";
 
 const config = loadConfig();
 const manager = new GraphManager(config);
@@ -65,7 +66,7 @@ server.tool(
   {
     target: z.string().describe("Name of the target artifact (e.g. 'businessunit')"),
     target_type: z
-      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity", "linked_service", "key_vault_secret"])
+      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity", "dataverse_attribute", "linked_service", "key_vault_secret"])
       .describe("Node type of the target"),
     environment: environmentParam,
   },
@@ -96,6 +97,24 @@ server.tool(
   },
 );
 
+// Tool 3a: graph_describe_entity
+server.tool(
+  "graph_describe_entity",
+  "Describe a Dataverse entity: metadata, attributes, and pipeline consumers. At 'full' depth, includes attribute types, required levels, and create/update flags from the schema file.",
+  {
+    entity: z.string().describe("Dataverse entity logical name (e.g. 'alm_organization')"),
+    depth: z.enum(["summary", "full"]).default("summary").describe("'summary' = names only; 'full' = attribute types, required levels, create/update flags"),
+    environment: environmentParam,
+  },
+  async ({ entity, depth, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const envName = environment ?? manager.getDefaultEnvironment();
+    const schemaPath = manager.getSchemaPath(envName);
+    const result = handleDescribeEntity(build.graph, entity, depth, schemaPath);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
 // Tool 4: graph_impact_analysis
 server.tool(
   "graph_impact_analysis",
@@ -103,7 +122,7 @@ server.tool(
   {
     target: z.string().describe("Name of the artifact to analyse"),
     target_type: z
-      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity", "linked_service", "key_vault_secret"])
+      .enum(["pipeline", "activity", "dataset", "stored_procedure", "table", "dataverse_entity", "dataverse_attribute", "linked_service", "key_vault_secret"])
       .describe("Node type of the target"),
     direction: z
       .enum(["upstream", "downstream", "both"])
