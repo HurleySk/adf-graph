@@ -6,7 +6,7 @@
   "author": "HurleySk",
   "repository": {
     "type": "git",
-    "url": "https://github.com/HurleySk/adf-graph.git"
+    "url": "git+https://github.com/HurleySk/adf-graph.git"
   },
   "homepage": "https://github.com/HurleySk/adf-graph#readme",
   "keywords": [
