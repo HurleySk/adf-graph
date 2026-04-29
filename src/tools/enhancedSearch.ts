@@ -143,6 +143,19 @@ export function handleEnhancedSearch(
       }
     }
 
+    // For DataverseEntity nodes, also search displayName and entitySetName
+    if (!matchedField && node.type === NodeType.DataverseEntity) {
+      const displayName = node.metadata.displayName as string | undefined;
+      const entitySetName = node.metadata.entitySetName as string | undefined;
+      if (displayName && displayName.toLowerCase().includes(lowerQuery)) {
+        matchedField = "displayName";
+        matchedText = displayName;
+      } else if (entitySetName && entitySetName.toLowerCase().includes(lowerQuery)) {
+        matchedField = "entitySetName";
+        matchedText = entitySetName;
+      }
+    }
+
     if (!matchedField) continue;
 
     // --- Build hit ---

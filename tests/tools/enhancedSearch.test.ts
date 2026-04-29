@@ -4,6 +4,7 @@ import { buildGraph } from "../../src/graph/builder.js";
 import { handleEnhancedSearch } from "../../src/tools/enhancedSearch.js";
 
 const fixtureRoot = join(import.meta.dirname, "../fixtures");
+const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
 
 describe("handleEnhancedSearch", () => {
   it("basic text search returns matches by node name", () => {
@@ -121,5 +122,37 @@ describe("handleEnhancedSearch", () => {
       expect(hit.pipeline).toBeDefined();
       expect(hit.activityType).toBeDefined();
     }
+  });
+});
+
+describe("search with schema data", () => {
+  it("finds DataverseEntity nodes by name", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleEnhancedSearch(graph, "alm_organization", {});
+    expect(result.hits.some((h) => h.nodeType === "dataverse_entity")).toBe(true);
+  });
+
+  it("finds DataverseEntity nodes by displayName metadata", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleEnhancedSearch(graph, "Organization", {});
+    expect(result.hits.some((h) => h.nodeType === "dataverse_entity" && h.name === "alm_organization")).toBe(true);
+  });
+
+  it("finds DataverseAttribute nodes by name", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleEnhancedSearch(graph, "alm_orgcode", {});
+    expect(result.hits.some((h) => h.nodeType === "dataverse_attribute")).toBe(true);
+  });
+
+  it("filters by nodeType dataverse_entity", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleEnhancedSearch(graph, "alm_", { nodeType: "dataverse_entity" });
+    expect(result.hits.every((h) => h.nodeType === "dataverse_entity")).toBe(true);
+  });
+
+  it("filters by nodeType dataverse_attribute", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleEnhancedSearch(graph, "alm_", { nodeType: "dataverse_attribute" });
+    expect(result.hits.every((h) => h.nodeType === "dataverse_attribute")).toBe(true);
   });
 });
