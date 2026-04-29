@@ -4,6 +4,7 @@ import { buildGraph } from "../../src/graph/builder.js";
 import { handleDataLineage } from "../../src/tools/lineage.js";
 
 const fixtureRoot = join(import.meta.dirname, "../fixtures");
+const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
 
 describe("handleDataLineage", () => {
   it("traces upstream lineage of a Dataverse entity and finds the staging table in the path", () => {
@@ -83,5 +84,21 @@ describe("handleDataLineage", () => {
     expect(result.paths).toEqual([]);
     expect(result.columnMappings).toEqual([]);
     expect(result.error).toBeDefined();
+  });
+});
+
+describe("lineage with schema data", () => {
+  it("traces downstream from staging table through to dataverse attributes", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleDataLineage(graph, "dbo.Org_Staging", undefined, "downstream");
+    const nodeIds = result.paths.flatMap((p) => p.steps.map((s) => s.nodeId));
+    expect(nodeIds.some((id) => id.startsWith("dataverse_attribute:"))).toBe(true);
+  });
+
+  it("matches attribute parameter against DataverseAttribute nodes", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleDataLineage(graph, "alm_organization", "alm_name", "upstream");
+    expect(result.columnMappings.length).toBeGreaterThan(0);
+    expect(result.columnMappings.some((m) => m.sinkColumn === "alm_name" && m.sourceColumn === "org_name")).toBe(true);
   });
 });

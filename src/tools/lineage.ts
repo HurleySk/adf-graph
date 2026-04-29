@@ -204,17 +204,30 @@ export function handleDataLineage(
         visitedNodes.add(outEdge.to);
 
         const sinkNode = graph.getNode(outEdge.to);
-        paths.push({
-          steps: [
-            actStep,
-            {
-              nodeId: outEdge.to,
-              nodeType: sinkNode?.type ?? "unknown",
-              name: sinkNode?.name ?? outEdge.to,
-              edgeType: outEdge.type,
-            },
-          ],
-        });
+        const sinkStep: LineageStep = {
+          nodeId: outEdge.to,
+          nodeType: sinkNode?.type ?? "unknown",
+          name: sinkNode?.name ?? outEdge.to,
+          edgeType: outEdge.type,
+        };
+        paths.push({ steps: [actStep, sinkStep] });
+
+        // Continue traversing downstream from the sink to capture child nodes
+        // (e.g. DataverseAttribute nodes reachable via HasAttribute edges)
+        const sinkDownstream = graph.traverseDownstream(outEdge.to, maxDepth);
+        for (const sr of sinkDownstream) {
+          if (visitedNodes.has(sr.node.id)) continue;
+          visitedNodes.add(sr.node.id);
+
+          const childSteps = pathToSteps(graph, sr.path, "downstream");
+          childSteps.push({
+            nodeId: sr.node.id,
+            nodeType: sr.node.type,
+            name: sr.node.name,
+            edgeType: "",
+          });
+          paths.push({ steps: [actStep, sinkStep, ...childSteps] });
+        }
       }
     }
   }
@@ -283,6 +296,39 @@ export function handleDataLineage(
           if (edge.metadata.targetTable) mapping.targetTable = edge.metadata.targetTable as string;
           if (edge.metadata.transformExpression) mapping.transformExpression = edge.metadata.transformExpression as string;
           columnMappings.push(mapping);
+        }
+      }
+    }
+
+    // DataverseAttribute cross-reference: when the target is a Dataverse entity,
+    // validate the attribute against the graph and scan all activity MapsColumn edges
+    // to catch any mappings not already covered above.
+    const entityName = nodeId.startsWith(`${NodeType.DataverseEntity}:`)
+      ? nodeId.slice(`${NodeType.DataverseEntity}:`.length)
+      : null;
+    if (entityName !== null) {
+      const attrNodeId = `${NodeType.DataverseAttribute}:${entityName}.${attribute}`;
+      if (graph.getNode(attrNodeId)) {
+        // Attribute exists in graph — scan all activity nodes for matching MapsColumn edges
+        const activityNodes = graph.getNodesByType(NodeType.Activity);
+        for (const actNode of activityNodes) {
+          const outgoing = graph.getOutgoing(actNode.id);
+          for (const edge of outgoing) {
+            if (edge.type !== EdgeType.MapsColumn) continue;
+            const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
+            const sinkColumn = (edge.metadata.sinkColumn as string | null) ?? null;
+            const matchesUpstream = direction === "upstream" && sinkColumn === attribute;
+            const matchesDownstream = direction === "downstream" && sourceColumn === attribute;
+            if (matchesUpstream || matchesDownstream) {
+              // Avoid duplicates
+              const alreadyPresent = columnMappings.some(
+                (m) => m.activityId === actNode.id && m.sourceColumn === sourceColumn && m.sinkColumn === sinkColumn,
+              );
+              if (!alreadyPresent) {
+                columnMappings.push({ activityId: actNode.id, sourceColumn, sinkColumn });
+              }
+            }
+          }
         }
       }
     }
