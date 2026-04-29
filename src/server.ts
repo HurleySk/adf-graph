@@ -300,9 +300,13 @@ server.tool(
       .array(z.string())
       .optional()
       .describe("Optional overlay paths to apply to this environment"),
+    schemaPath: z
+      .string()
+      .optional()
+      .describe("Optional path to Dataverse schema environment directory (contains per-entity JSON files)"),
   },
-  async ({ name, path, overlays }) => {
-    const result = handleAddEnvironment(manager, name, path, overlays);
+  async ({ name, path, overlays, schemaPath }) => {
+    const result = handleAddEnvironment(manager, name, path, overlays, schemaPath);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );

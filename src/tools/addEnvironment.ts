@@ -11,7 +11,8 @@ export function handleAddEnvironment(
   name: string,
   path: string,
   overlays?: string[],
+  schemaPath?: string,
 ): AddEnvironmentResult {
-  manager.addEnvironment(name, path, overlays);
+  manager.addEnvironment(name, path, overlays, schemaPath);
   return { added: true, name, path };
 }
