@@ -13,7 +13,7 @@ const SYSTEM_ATTRIBUTES = new Set([
 
 export interface ColumnValidation {
   alias: string;
-  status: "valid" | "invalid" | "system";
+  status: "valid" | "invalid" | "system" | "annotation";
 }
 
 export interface ActivityValidation {
@@ -34,6 +34,7 @@ export interface ValidatePipelineResult {
     validColumns: number;
     invalidColumns: number;
     systemColumns: number;
+    annotationColumns: number;
   };
   warnings: string[];
   error?: string;
@@ -73,6 +74,23 @@ function getEntityAttributes(
   return attrs;
 }
 
+function classifyAlias(
+  alias: string,
+  entityAttrs: Set<string> | null,
+): ColumnValidation {
+  if (alias.includes("@")) {
+    return { alias, status: "annotation" };
+  }
+  const aliasLower = alias.toLowerCase();
+  if (SYSTEM_ATTRIBUTES.has(aliasLower)) {
+    return { alias, status: "system" };
+  }
+  if (!entityAttrs) {
+    return { alias, status: "valid" };
+  }
+  return { alias, status: entityAttrs.has(aliasLower) ? "valid" : "invalid" };
+}
+
 export function validateDestQueryActivity(
   graph: Graph,
   activityNode: GraphNode,
@@ -95,19 +113,7 @@ export function validateDestQueryActivity(
   const entityAttrs = getEntityAttributes(graph, entityName, schemaPath);
   const entityFound = entityAttrs !== null;
 
-  const columns: ColumnValidation[] = parseResult.aliases.map((a) => {
-    const aliasLower = a.alias.toLowerCase();
-    if (SYSTEM_ATTRIBUTES.has(aliasLower)) {
-      return { alias: a.alias, status: "system" as const };
-    }
-    if (!entityFound) {
-      return { alias: a.alias, status: "valid" as const };
-    }
-    return {
-      alias: a.alias,
-      status: entityAttrs!.has(aliasLower) ? "valid" as const : "invalid" as const,
-    };
-  });
+  const columns = parseResult.aliases.map((a) => classifyAlias(a.alias, entityAttrs));
 
   return {
     validation: {
@@ -143,19 +149,7 @@ export function validatePipelineDefaults(
   const entityAttrs = getEntityAttributes(graph, entityDefault, schemaPath);
   const entityFound = entityAttrs !== null;
 
-  const columns: ColumnValidation[] = parseResult.aliases.map((a) => {
-    const aliasLower = a.alias.toLowerCase();
-    if (SYSTEM_ATTRIBUTES.has(aliasLower)) {
-      return { alias: a.alias, status: "system" as const };
-    }
-    if (!entityFound) {
-      return { alias: a.alias, status: "valid" as const };
-    }
-    return {
-      alias: a.alias,
-      status: entityAttrs!.has(aliasLower) ? "valid" as const : "invalid" as const,
-    };
-  });
+  const columns = parseResult.aliases.map((a) => classifyAlias(a.alias, entityAttrs));
 
   return {
     validation: {
@@ -180,7 +174,7 @@ export function handleValidatePipeline(
     return {
       pipeline,
       activities: [],
-      summary: { totalActivities: 0, totalColumns: 0, validColumns: 0, invalidColumns: 0, systemColumns: 0 },
+      summary: { totalActivities: 0, totalColumns: 0, validColumns: 0, invalidColumns: 0, systemColumns: 0, annotationColumns: 0 },
       warnings: [],
       error: lookup.error,
     };
@@ -213,6 +207,7 @@ export function handleValidatePipeline(
   const validColumns = activities.reduce((sum, a) => sum + a.columns.filter((c) => c.status === "valid").length, 0);
   const invalidColumns = activities.reduce((sum, a) => sum + a.columns.filter((c) => c.status === "invalid").length, 0);
   const systemColumns = activities.reduce((sum, a) => sum + a.columns.filter((c) => c.status === "system").length, 0);
+  const annotationColumns = activities.reduce((sum, a) => sum + a.columns.filter((c) => c.status === "annotation").length, 0);
 
   return {
     pipeline,
@@ -223,6 +218,7 @@ export function handleValidatePipeline(
       validColumns,
       invalidColumns,
       systemColumns,
+      annotationColumns,
     },
     warnings,
   };

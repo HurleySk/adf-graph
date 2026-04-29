@@ -111,6 +111,18 @@ describe("handleValidatePipeline", () => {
     expect(nonexistent!.status).toBe("invalid");
   });
 
+  it("marks @EntityReference aliases as annotation", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidatePipeline(graph, "Dest_Query_Test", schemaPath);
+
+    const loadOrgs = result.activities.find((a) => a.activityName === "Load Organizations");
+    expect(loadOrgs).toBeDefined();
+
+    const annotation = loadOrgs!.columns.find((c) => c.alias === "ownerid@EntityReference");
+    expect(annotation).toBeDefined();
+    expect(annotation!.status).toBe("annotation");
+  });
+
   it("produces correct summary counts", () => {
     const { graph } = buildGraph(fixtureRoot, schemaPath);
     const result = handleValidatePipeline(graph, "Dest_Query_Test", schemaPath);
@@ -118,8 +130,9 @@ describe("handleValidatePipeline", () => {
     expect(result.summary.totalActivities).toBeGreaterThanOrEqual(2);
     expect(result.summary.invalidColumns).toBeGreaterThanOrEqual(1);
     expect(result.summary.systemColumns).toBeGreaterThanOrEqual(1);
+    expect(result.summary.annotationColumns).toBeGreaterThanOrEqual(1);
     expect(result.summary.totalColumns).toBe(
-      result.summary.validColumns + result.summary.invalidColumns + result.summary.systemColumns
+      result.summary.validColumns + result.summary.invalidColumns + result.summary.systemColumns + result.summary.annotationColumns
     );
   });
 });

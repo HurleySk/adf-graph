@@ -14,7 +14,7 @@
           },
           "waitOnCompletion": true,
           "parameters": {
-            "dest_query": "SELECT org_id AS alm_orgid, org_name AS alm_name, org_code AS alm_orgcode, bad_col AS nonexistent_attr, status AS statecode FROM dbo.Org_Staging",
+            "dest_query": "SELECT org_id AS alm_orgid, org_name AS alm_name, org_code AS alm_orgcode, bad_col AS nonexistent_attr, status AS statecode, CAST('team' as char(4)) as [ownerid@EntityReference] FROM dbo.Org_Staging",
             "dataverse_entity_name": "alm_organization"
           }
         }

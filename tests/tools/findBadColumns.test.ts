@@ -46,6 +46,15 @@ describe("handleFindBadColumns", () => {
     expect(defaultEntry!.badColumns).toContain("nonexistent_attr");
   });
 
+  it("does not flag @EntityReference annotations as bad", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleFindBadColumns(graph, schemaPath);
+
+    for (const entry of result.entries) {
+      expect(entry.badColumns).not.toContain("ownerid@EntityReference");
+    }
+  });
+
   it("does not flag system attributes as bad", () => {
     const { graph } = buildGraph(fixtureRoot, schemaPath);
     const result = handleFindBadColumns(graph, schemaPath);
