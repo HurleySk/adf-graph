@@ -1,0 +1,41 @@
+{
+  "LogicalName": "businessunit",
+  "PrimaryNameAttribute": "name",
+  "PrimaryIdAttribute": "businessunitid",
+  "SchemaName": "BusinessUnit",
+  "EntitySetName": "businessunits",
+  "DisplayName": { "UserLocalizedLabel": { "Label": "Business Unit" } },
+  "Attributes": [
+    {
+      "LogicalName": "businessunitid",
+      "AttributeType": "Uniqueidentifier",
+      "IsPrimaryId": true,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": false,
+      "IsCustomAttribute": false,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Business Unit ID" } },
+      "RequiredLevel": { "Value": "Required" }
+    },
+    {
+      "LogicalName": "name",
+      "AttributeType": "String",
+      "IsPrimaryId": false,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": true,
+      "IsCustomAttribute": false,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Name" } },
+      "RequiredLevel": { "Value": "Required" }
+    },
+    {
+      "LogicalName": "parentbusinessunitid",
+      "AttributeType": "Lookup",
+      "IsPrimaryId": false,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": true,
+      "IsCustomAttribute": false,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Parent Business Unit" } },
+      "RequiredLevel": { "Value": "None" }
+    }
+  ],
+  "Keys": []
+}

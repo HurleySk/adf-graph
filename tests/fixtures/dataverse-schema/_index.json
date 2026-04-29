@@ -1,0 +1,39 @@
+{
+  "generated": "2026-01-01T00:00:00Z",
+  "entityCount": 3,
+  "entities": [
+    {
+      "logicalName": "alm_organization",
+      "displayName": "Organization",
+      "entitySetName": "alm_organizations",
+      "description": "Organization entity",
+      "primaryId": "alm_organizationid",
+      "primaryName": "alm_name",
+      "attributeCount": 5,
+      "file": "alm_organization.json",
+      "attributes": "alm_organizationid, alm_name, alm_orgcode, alm_orgtype, createdon"
+    },
+    {
+      "logicalName": "businessunit",
+      "displayName": "Business Unit",
+      "entitySetName": "businessunits",
+      "description": "Business unit entity",
+      "primaryId": "businessunitid",
+      "primaryName": "name",
+      "attributeCount": 3,
+      "file": "businessunit.json",
+      "attributes": "businessunitid, name, parentbusinessunitid"
+    },
+    {
+      "logicalName": "alm_notinenv",
+      "displayName": "Not In Env",
+      "entitySetName": "alm_notinenvs",
+      "description": "Entity in index but not in environment subdirectory",
+      "primaryId": "alm_notinenvid",
+      "primaryName": "alm_name",
+      "attributeCount": 2,
+      "file": "alm_notinenv.json",
+      "attributes": "alm_notinenvid, alm_name"
+    }
+  ]
+}

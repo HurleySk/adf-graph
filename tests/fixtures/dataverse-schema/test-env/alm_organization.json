@@ -1,0 +1,61 @@
+{
+  "LogicalName": "alm_organization",
+  "PrimaryNameAttribute": "alm_name",
+  "PrimaryIdAttribute": "alm_organizationid",
+  "SchemaName": "alm_Organization",
+  "EntitySetName": "alm_organizations",
+  "DisplayName": { "UserLocalizedLabel": { "Label": "Organization" } },
+  "Attributes": [
+    {
+      "LogicalName": "alm_organizationid",
+      "AttributeType": "Uniqueidentifier",
+      "IsPrimaryId": true,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": false,
+      "IsCustomAttribute": false,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Organization ID" } },
+      "RequiredLevel": { "Value": "Required" }
+    },
+    {
+      "LogicalName": "alm_name",
+      "AttributeType": "String",
+      "IsPrimaryId": false,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": true,
+      "IsCustomAttribute": true,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Name" } },
+      "RequiredLevel": { "Value": "Required" }
+    },
+    {
+      "LogicalName": "alm_orgcode",
+      "AttributeType": "String",
+      "IsPrimaryId": false,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": true,
+      "IsCustomAttribute": true,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Org Code" } },
+      "RequiredLevel": { "Value": "None" }
+    },
+    {
+      "LogicalName": "alm_orgtype",
+      "AttributeType": "Picklist",
+      "IsPrimaryId": false,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": true,
+      "IsCustomAttribute": true,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Org Type" } },
+      "RequiredLevel": { "Value": "Recommended" }
+    },
+    {
+      "LogicalName": "createdon",
+      "AttributeType": "DateTime",
+      "IsPrimaryId": false,
+      "IsValidForCreate": false,
+      "IsValidForUpdate": false,
+      "IsCustomAttribute": false,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Created On" } },
+      "RequiredLevel": { "Value": "None" }
+    }
+  ],
+  "Keys": []
+}
