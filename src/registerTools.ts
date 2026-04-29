@@ -127,11 +127,15 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
       attribute: z.string().optional().describe("Optional attribute/column name for column-level lineage"),
       direction: z.enum(["upstream", "downstream"]).describe("'upstream' = what feeds this node; 'downstream' = what this node feeds"),
       maxDepth: z.number().int().min(1).optional().describe("Maximum traversal depth (hops). Omit for unlimited."),
+      detail: z.enum(["summary", "full"]).default("summary").describe("'summary' = unique nodes grouped by type; 'full' = complete paths"),
+      nodeTypes: z.array(z.string()).optional().describe("Filter to these node types (e.g. ['table', 'dataverse_entity'])"),
+      limit: z.number().int().min(1).optional().describe("Max paths to return (full mode only)"),
+      offset: z.number().int().min(0).optional().describe("Paths to skip (full mode only)"),
       environment: environmentParam,
     },
-    async ({ entity, attribute, direction, maxDepth, environment }) => {
+    async ({ entity, attribute, direction, maxDepth, detail, nodeTypes, limit, offset, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleDataLineage(build.graph, entity, attribute, direction, maxDepth));
+      return json(handleDataLineage(build.graph, entity, attribute, direction, maxDepth, detail, nodeTypes, limit, offset));
     },
   );
 
@@ -310,10 +314,13 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
   server.tool(
     "graph_ignore_null_values_audit",
     "Scan all Copy activities writing to Dataverse and flag those with ignoreNullValues absent or false. This dangerous default causes NULL source columns to overwrite existing Dataverse values.",
-    { environment: environmentParam },
-    async ({ environment }) => {
+    {
+      detail: z.enum(["summary", "full"]).default("summary").describe("'summary' = per-pipeline counts; 'full' = every flagged activity"),
+      environment: environmentParam,
+    },
+    async ({ detail, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleIgnoreNullValuesAudit(build.graph));
+      return json(handleIgnoreNullValuesAudit(build.graph, detail));
     },
   );
 
@@ -335,11 +342,12 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     "Show all pipelines writing to a Dataverse entity with per-pipeline column lists. Highlights column differences across pipelines to detect mapping inconsistencies.",
     {
       entity: z.string().describe("Dataverse entity logical name (e.g. 'alm_workset')"),
+      detail: z.enum(["summary", "full"]).default("summary").describe("'summary' = columns + frequency only; 'full' = per-pipeline coverage entries"),
       environment: environmentParam,
     },
-    async ({ entity, environment }) => {
+    async ({ entity, detail, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleEntityCoverage(build.graph, entity));
+      return json(handleEntityCoverage(build.graph, entity, detail));
     },
   );
 

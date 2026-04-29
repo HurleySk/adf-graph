@@ -26,14 +26,36 @@ export interface EntityCoverageResult {
   error?: string;
 }
 
+export interface EntityCoverageSummaryResult {
+  entity: string;
+  entityFound: boolean;
+  totalWritingPipelines: number;
+  allColumns: string[];
+  columnFrequency: Record<string, number>;
+  warnings: string[];
+  error?: string;
+}
+
 export function handleEntityCoverage(
   graph: Graph,
   entity: string,
-): EntityCoverageResult {
+  detail: "summary" | "full" = "summary",
+): EntityCoverageResult | EntityCoverageSummaryResult {
   const entityNodeId = makeNodeId(NodeType.DataverseEntity, entity);
   const entityNode = graph.getNode(entityNodeId);
 
   if (!entityNode) {
+    if (detail === "summary") {
+      return {
+        entity,
+        entityFound: false,
+        totalWritingPipelines: 0,
+        allColumns: [],
+        columnFrequency: {},
+        warnings: [],
+        error: `Entity '${entity}' not found in graph`,
+      };
+    }
     return {
       entity,
       entityFound: false,
@@ -154,6 +176,17 @@ export function handleEntityCoverage(
 
   const allColumns = Object.keys(columnFrequency).sort();
   const writingPipelines = new Set(entries.map((e) => e.pipeline));
+
+  if (detail === "summary") {
+    return {
+      entity,
+      entityFound: true,
+      totalWritingPipelines: writingPipelines.size,
+      allColumns,
+      columnFrequency,
+      warnings,
+    };
+  }
 
   return {
     entity,

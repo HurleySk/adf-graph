@@ -22,11 +22,32 @@ export interface ColumnMapping {
   transformExpression?: string;
 }
 
+export type LineageDetail = "summary" | "full";
+
+export interface LineageNodeGroup {
+  type: string;
+  nodes: { nodeId: string; name: string }[];
+}
+
+export interface DataLineageSummaryResult {
+  entity: string;
+  attribute?: string;
+  direction: LineageDirection;
+  totalPaths: number;
+  duplicatesRemoved: number;
+  nodesByType: LineageNodeGroup[];
+  columnMappings: ColumnMapping[];
+  truncated?: boolean;
+  error?: string;
+}
+
 export interface DataLineageResult {
   entity: string;
   attribute?: string;
   direction: LineageDirection;
   paths: LineagePath[];
+  totalPaths: number;
+  duplicatesRemoved: number;
   columnMappings: ColumnMapping[];
   truncated?: boolean;
   error?: string;
@@ -68,7 +89,11 @@ export function handleDataLineage(
   attribute?: string,
   direction: LineageDirection = "upstream",
   maxDepth?: number,
-): DataLineageResult {
+  detail: LineageDetail = "summary",
+  nodeTypes?: string[],
+  limit?: number,
+  offset?: number,
+): DataLineageResult | DataLineageSummaryResult {
   // Resolve node ID: try dataverse_entity first, then table (exact), then dbo-prefixed, then scan
   let nodeId = `dataverse_entity:${entity}`;
   if (!graph.getNode(nodeId)) {
@@ -103,6 +128,8 @@ export function handleDataLineage(
       attribute,
       direction,
       paths: [],
+      totalPaths: 0,
+      duplicatesRemoved: 0,
       columnMappings: [],
       error: `Node for '${entity}' not found as dataverse_entity or table`,
     };
@@ -334,11 +361,69 @@ export function handleDataLineage(
     }
   }
 
+  // Deduplicate paths by step signature
+  const totalPaths = paths.length;
+  const seen = new Set<string>();
+  const dedupedPaths: LineagePath[] = [];
+  for (const p of paths) {
+    const sig = p.steps.map((s) => s.nodeId).join("\u2192");
+    if (!seen.has(sig)) {
+      seen.add(sig);
+      dedupedPaths.push(p);
+    }
+  }
+  const duplicatesRemoved = totalPaths - dedupedPaths.length;
+
+  let filteredPaths = dedupedPaths;
+  if (nodeTypes && nodeTypes.length > 0) {
+    const allowed = new Set(nodeTypes);
+    filteredPaths = dedupedPaths
+      .map((p) => ({ steps: p.steps.filter((s) => allowed.has(s.nodeType)) }))
+      .filter((p) => p.steps.length > 0);
+  }
+
+  if (detail === "summary") {
+    // Group unique nodes by type
+    const nodeMap = new Map<string, Map<string, string>>();
+    for (const p of filteredPaths) {
+      for (const s of p.steps) {
+        if (!nodeMap.has(s.nodeType)) nodeMap.set(s.nodeType, new Map());
+        nodeMap.get(s.nodeType)!.set(s.nodeId, s.name);
+      }
+    }
+    const nodesByType: LineageNodeGroup[] = [...nodeMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([type, nodes]) => ({
+        type,
+        nodes: [...nodes.entries()].map(([nodeId, name]) => ({ nodeId, name })).sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+
+    return {
+      entity,
+      attribute,
+      direction,
+      totalPaths,
+      duplicatesRemoved,
+      nodesByType,
+      columnMappings,
+      ...(maxDepth !== undefined ? { truncated: true } : {}),
+    };
+  }
+
+  // Full mode with optional pagination
+  let resultPaths = filteredPaths;
+  if (limit !== undefined || offset !== undefined) {
+    const start = offset ?? 0;
+    resultPaths = filteredPaths.slice(start, limit !== undefined ? start + limit : undefined);
+  }
+
   return {
     entity,
     attribute,
     direction,
-    paths,
+    paths: resultPaths,
+    totalPaths,
+    duplicatesRemoved,
     columnMappings,
     ...(maxDepth !== undefined ? { truncated: true } : {}),
   };

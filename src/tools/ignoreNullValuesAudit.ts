@@ -30,9 +30,26 @@ export interface IgnoreNullValuesAuditResult {
   warnings: string[];
 }
 
+export interface AuditPipelineBreakdown {
+  pipeline: string;
+  flaggedCount: number;
+  entities: string[];
+}
+
+export interface IgnoreNullValuesAuditSummaryResult {
+  summary: {
+    totalCopyActivities: number;
+    dataverseSinks: number;
+    flaggedCount: number;
+  };
+  pipelineBreakdown: AuditPipelineBreakdown[];
+  warnings: string[];
+}
+
 export function handleIgnoreNullValuesAudit(
   graph: Graph,
-): IgnoreNullValuesAuditResult {
+  detail: "summary" | "full" = "summary",
+): IgnoreNullValuesAuditResult | IgnoreNullValuesAuditSummaryResult {
   const warnings: string[] = [];
   const flagged: IgnoreNullValuesEntry[] = [];
   let totalCopyActivities = 0;
@@ -69,13 +86,35 @@ export function handleIgnoreNullValuesAudit(
 
   flagged.sort((a, b) => a.pipeline.localeCompare(b.pipeline) || a.activity.localeCompare(b.activity));
 
+  if (detail === "summary") {
+    const byPipeline = new Map<string, { count: number; entities: Set<string> }>();
+    for (const entry of flagged) {
+      let bucket = byPipeline.get(entry.pipeline);
+      if (!bucket) {
+        bucket = { count: 0, entities: new Set() };
+        byPipeline.set(entry.pipeline, bucket);
+      }
+      bucket.count++;
+      if (entry.entity) bucket.entities.add(entry.entity);
+    }
+    const pipelineBreakdown: AuditPipelineBreakdown[] = [...byPipeline.entries()]
+      .map(([pipeline, b]) => ({
+        pipeline,
+        flaggedCount: b.count,
+        entities: [...b.entities].sort(),
+      }))
+      .sort((a, b) => a.pipeline.localeCompare(b.pipeline));
+
+    return {
+      summary: { totalCopyActivities, dataverseSinks, flaggedCount: flagged.length },
+      pipelineBreakdown,
+      warnings,
+    };
+  }
+
   return {
     flagged,
-    summary: {
-      totalCopyActivities,
-      dataverseSinks,
-      flaggedCount: flagged.length,
-    },
+    summary: { totalCopyActivities, dataverseSinks, flaggedCount: flagged.length },
     warnings,
   };
 }
