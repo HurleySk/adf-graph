@@ -204,4 +204,50 @@ describe("loadConfig", () => {
       expect(() => loadConfig()).toThrow(/cannot contain '\+'/);
     });
   });
+
+  describe("schemaPath in config", () => {
+    it("parses schemaPath for an environment", () => {
+      const cfgPath = writeConfig("schema-path.json", {
+        environments: {
+          main: { path: "/some/path", default: true, schemaPath: "/some/schema" },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+
+      const config = loadConfig();
+      expect(config.environments["main"].schemaPath).toBe("/some/schema");
+    });
+
+    it("defaults schemaPath to undefined when not provided", () => {
+      const cfgPath = writeConfig("no-schema-path.json", {
+        environments: {
+          main: { path: "/some/path", default: true },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+
+      const config = loadConfig();
+      expect(config.environments["main"].schemaPath).toBeUndefined();
+    });
+
+    it("rejects non-string schemaPath (number)", () => {
+      const cfgPath = writeConfig("bad-schema-path-number.json", {
+        environments: {
+          main: { path: "/some/path", schemaPath: 42 },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+      expect(() => loadConfig()).toThrow(/schemaPath must be a non-empty string/);
+    });
+
+    it("rejects empty string schemaPath", () => {
+      const cfgPath = writeConfig("bad-schema-path-empty.json", {
+        environments: {
+          main: { path: "/some/path", schemaPath: "" },
+        },
+      });
+      setEnv({ ADF_CONFIG: cfgPath });
+      expect(() => loadConfig()).toThrow(/schemaPath must be a non-empty string/);
+    });
+  });
 });

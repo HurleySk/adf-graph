@@ -6,6 +6,7 @@ export interface EnvironmentConfig {
   path: string;
   default?: boolean;
   overlays?: string[];
+  schemaPath?: string;
 }
 
 export interface AdfGraphConfig {
@@ -112,10 +113,20 @@ function validateConfig(raw: unknown, source: string): AdfGraphConfig {
       }
       overlays = envObj.overlays as string[];
     }
+    let schemaPath: string | undefined;
+    if (envObj.schemaPath !== undefined) {
+      if (typeof envObj.schemaPath !== "string" || !envObj.schemaPath) {
+        throw new Error(
+          `adf-graph: environment '${name}' in '${source}': schemaPath must be a non-empty string`,
+        );
+      }
+      schemaPath = envObj.schemaPath;
+    }
     environments[name] = {
       path: envObj.path,
       ...(envObj.default === true ? { default: true } : {}),
       ...(overlays ? { overlays } : {}),
+      ...(schemaPath ? { schemaPath } : {}),
     };
   }
   if (Object.keys(environments).length === 0) {
