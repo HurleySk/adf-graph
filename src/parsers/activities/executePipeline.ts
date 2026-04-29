@@ -41,31 +41,37 @@ export function parseExecutePipeline(
     activityNode.metadata.pipelineParameters = execParams;
 
     // Extract source tables from source_query parameter
+    const seenSourceTables = new Set<string>();
     const sqlText = asString(execParams.source_query) ?? null;
     if (sqlText) {
       const tables = extractTablesFromSql(sqlText);
       for (const tbl of tables) {
+        const target = `${NodeType.Table}:${tbl}`;
+        seenSourceTables.add(target);
         edges.push({
           from: activityNode.id,
-          to: `${NodeType.Table}:${tbl}`,
+          to: target,
           type: EdgeType.ReadsFrom,
           metadata: {},
         });
       }
     }
 
-    // Extract source table from source_object_name parameter
+    // Extract source table from source_object_name parameter (skip if already covered by source_query)
     const sourceObjName = asString(execParams.source_object_name);
     if (sourceObjName && sourceObjName.length > 0 && !sourceObjName.startsWith("@")) {
       const srcSchema = asString(execParams.source_schema_name);
       const schema = srcSchema && !srcSchema.startsWith("@") ? srcSchema : "dbo";
       const tableName = sourceObjName.includes(".") ? sourceObjName : `${schema}.${sourceObjName}`;
-      edges.push({
-        from: activityNode.id,
-        to: `${NodeType.Table}:${tableName}`,
-        type: EdgeType.ReadsFrom,
-        metadata: {},
-      });
+      const target = `${NodeType.Table}:${tableName}`;
+      if (!seenSourceTables.has(target)) {
+        edges.push({
+          from: activityNode.id,
+          to: target,
+          type: EdgeType.ReadsFrom,
+          metadata: {},
+        });
+      }
     }
 
     // Extract destination table from dest_object_name parameter
@@ -73,9 +79,10 @@ export function parseExecutePipeline(
     if (destObjName && destObjName.length > 0 && !destObjName.startsWith("@")) {
       const destSchema = asString(execParams.dest_schema_name);
       const schema = destSchema && !destSchema.startsWith("@") ? destSchema : "dbo";
+      const tableName = destObjName.includes(".") ? destObjName : `${schema}.${destObjName}`;
       edges.push({
         from: activityNode.id,
-        to: `${NodeType.Table}:${schema}.${destObjName}`,
+        to: `${NodeType.Table}:${tableName}`,
         type: EdgeType.WritesTo,
         metadata: {},
       });

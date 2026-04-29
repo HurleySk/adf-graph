@@ -123,6 +123,19 @@ export function handleDataLineage(
 
   const node = graph.getNode(nodeId);
   if (!node) {
+    const errorMsg = `Node for '${entity}' not found as dataverse_entity or table`;
+    if (detail === "summary") {
+      return {
+        entity,
+        attribute,
+        direction,
+        totalPaths: 0,
+        duplicatesRemoved: 0,
+        nodesByType: [],
+        columnMappings: [],
+        error: errorMsg,
+      };
+    }
     return {
       entity,
       attribute,
@@ -131,7 +144,7 @@ export function handleDataLineage(
       totalPaths: 0,
       duplicatesRemoved: 0,
       columnMappings: [],
-      error: `Node for '${entity}' not found as dataverse_entity or table`,
+      error: errorMsg,
     };
   }
 

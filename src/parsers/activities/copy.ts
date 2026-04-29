@@ -2,7 +2,6 @@ import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { extractTablesFromSql } from "../parseResult.js";
 import { asString } from "../../utils/expressionValue.js";
 
-
 export function processDatasetParams(
   activityId: string,
   params: Record<string, unknown>,
