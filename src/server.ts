@@ -25,13 +25,16 @@ import { handleEnhancedSearch } from "./tools/enhancedSearch.js";
 import { handleTraceConnection } from "./tools/traceConnection.js";
 import { handleCrossEnvArtifact } from "./tools/crossEnvArtifact.js";
 import { handleDescribeEntity } from "./tools/describeEntity.js";
+import { handleValidatePipeline } from "./tools/validatePipeline.js";
+import { handleValidateStatuscode } from "./tools/validateStatuscode.js";
+import { handleFindBadColumns } from "./tools/findBadColumns.js";
 
 const config = loadConfig();
 const manager = new GraphManager(config);
 
 const server = new McpServer({
   name: "adf-graph",
-  version: "1.0.1",
+  version: "1.1.0",
 });
 
 /** Shared optional environment parameter for all graph tools. */
@@ -419,6 +422,56 @@ server.tool(
   },
   async ({ name, artifact_type }) => {
     const result = handleCrossEnvArtifact(manager, name, artifact_type);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 23: graph_validate_pipeline
+server.tool(
+  "graph_validate_pipeline",
+  "Validate dest_query column aliases against Dataverse entity schema. Checks that each SQL alias maps to a valid entity attribute, flags invalid columns, and whitelists system attributes.",
+  {
+    pipeline: z.string().describe("Pipeline name"),
+    environment: environmentParam,
+  },
+  async ({ pipeline, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const envName = environment ?? manager.getDefaultEnvironment();
+    const schemaPath = manager.getSchemaPath(envName);
+    const result = handleValidatePipeline(build.graph, pipeline, schemaPath);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 24: graph_validate_statuscode
+server.tool(
+  "graph_validate_statuscode",
+  "Validate CASE WHEN values for statuscode/statecode columns in dest_query against Dataverse OptionSet metadata. Checks that integer values map to valid OptionSet options.",
+  {
+    pipeline: z.string().describe("Pipeline name"),
+    environment: environmentParam,
+  },
+  async ({ pipeline, environment }) => {
+    const build = manager.ensureGraph(environment);
+    const envName = environment ?? manager.getDefaultEnvironment();
+    const schemaPath = manager.getSchemaPath(envName);
+    const result = handleValidateStatuscode(build.graph, pipeline, schemaPath);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
+// Tool 25: graph_find_bad_columns
+server.tool(
+  "graph_find_bad_columns",
+  "Bulk audit: scan all pipelines for dest_query parameters and report every column alias that does not match a Dataverse entity attribute.",
+  {
+    environment: environmentParam,
+  },
+  async ({ environment }) => {
+    const build = manager.ensureGraph(environment);
+    const envName = environment ?? manager.getDefaultEnvironment();
+    const schemaPath = manager.getSchemaPath(envName);
+    const result = handleFindBadColumns(build.graph, schemaPath);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );

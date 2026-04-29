@@ -18,7 +18,7 @@ describe("handleDescribeEntity", () => {
     expect(result.entitySetName).toBe("alm_organizations");
     expect(result.primaryId).toBe("alm_organizationid");
     expect(result.primaryName).toBe("alm_name");
-    expect(result.attributeCount).toBe(5);
+    expect(result.attributeCount).toBe(6);
   });
 
   it("lists attribute names at summary depth", () => {

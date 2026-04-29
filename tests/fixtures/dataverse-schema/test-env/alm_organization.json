@@ -44,7 +44,13 @@
       "IsValidForUpdate": true,
       "IsCustomAttribute": true,
       "DisplayName": { "UserLocalizedLabel": { "Label": "Org Type" } },
-      "RequiredLevel": { "Value": "Recommended" }
+      "RequiredLevel": { "Value": "Recommended" },
+      "OptionSet": {
+        "Options": [
+          { "Value": 100000000, "Label": { "UserLocalizedLabel": { "Label": "Government" } } },
+          { "Value": 100000001, "Label": { "UserLocalizedLabel": { "Label": "Commercial" } } }
+        ]
+      }
     },
     {
       "LogicalName": "createdon",
@@ -55,6 +61,22 @@
       "IsCustomAttribute": false,
       "DisplayName": { "UserLocalizedLabel": { "Label": "Created On" } },
       "RequiredLevel": { "Value": "None" }
+    },
+    {
+      "LogicalName": "statuscode",
+      "AttributeType": "Status",
+      "IsPrimaryId": false,
+      "IsValidForCreate": true,
+      "IsValidForUpdate": true,
+      "IsCustomAttribute": false,
+      "DisplayName": { "UserLocalizedLabel": { "Label": "Status Reason" } },
+      "RequiredLevel": { "Value": "None" },
+      "OptionSet": {
+        "Options": [
+          { "Value": 1, "Label": { "UserLocalizedLabel": { "Label": "Active" } } },
+          { "Value": 2, "Label": { "UserLocalizedLabel": { "Label": "Inactive" } } }
+        ]
+      }
     }
   ],
   "Keys": []

@@ -9,6 +9,11 @@ export interface SchemaParseResult {
   entityCount: number;
 }
 
+export interface OptionSetValue {
+  value: number;
+  label: string;
+}
+
 export interface AttributeDetail {
   logicalName: string;
   attributeType: string;
@@ -17,6 +22,7 @@ export interface AttributeDetail {
   isValidForUpdate: boolean;
   displayName: string;
   isCustomAttribute: boolean;
+  optionSet?: OptionSetValue[];
 }
 
 export interface EntityDetail {
@@ -161,6 +167,21 @@ export function loadEntityDetail(
       | Record<string, unknown>
       | undefined;
 
+    const optionSetObj = attr.OptionSet as Record<string, unknown> | undefined;
+    let optionSet: OptionSetValue[] | undefined;
+    if (optionSetObj) {
+      const options = (optionSetObj.Options as unknown[]) ?? [];
+      optionSet = options.map((o) => {
+        const opt = o as Record<string, unknown>;
+        const labelObj = opt.Label as Record<string, unknown> | undefined;
+        const userLabel = labelObj?.UserLocalizedLabel as Record<string, unknown> | undefined;
+        return {
+          value: (opt.Value as number) ?? 0,
+          label: (userLabel?.Label as string) ?? "",
+        };
+      });
+    }
+
     return {
       logicalName: (attr.LogicalName as string) ?? "",
       attributeType: (attr.AttributeType as string) ?? "",
@@ -169,6 +190,7 @@ export function loadEntityDetail(
       isValidForUpdate: (attr.IsValidForUpdate as boolean) ?? false,
       displayName: (userLocalizedLabel?.Label as string) ?? "",
       isCustomAttribute: (attr.IsCustomAttribute as boolean) ?? false,
+      optionSet,
     };
   });
 

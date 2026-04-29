@@ -30,12 +30,10 @@ describe("handleFindOrchestrators", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleFindOrchestrators(graph, "Copy_To_Staging");
     expect(result.isRoot).toBe(false);
-    expect(result.ancestors).toHaveLength(1);
-    expect(result.ancestors[0]).toEqual({
-      root: "Test_Orchestrator",
-      chain: ["Test_Orchestrator", "Copy_To_Staging"],
-      depth: 1,
-    });
+    // Copy_To_Staging is executed by both Test_Orchestrator and Dest_Query_Test
+    expect(result.ancestors).toHaveLength(2);
+    const roots = result.ancestors.map((a) => a.root).sort();
+    expect(roots).toEqual(["Dest_Query_Test", "Test_Orchestrator"]);
     expect(result.error).toBeUndefined();
   });
 
@@ -43,16 +41,17 @@ describe("handleFindOrchestrators", () => {
     const { graph } = buildGraph(fixtureRoot);
 
     const staging = handleFindOrchestrators(graph, "Copy_To_Staging");
-    expect(staging.ancestors[0].root).toBe("Test_Orchestrator");
-    expect(staging.ancestors[0].depth).toBe(1);
+    const stagingRoots = staging.ancestors.map((a) => a.root).sort();
+    expect(stagingRoots).toContain("Test_Orchestrator");
 
     const transform = handleFindOrchestrators(graph, "SP_Transform");
     expect(transform.ancestors[0].root).toBe("Test_Orchestrator");
     expect(transform.ancestors[0].depth).toBe(1);
 
     const dataverse = handleFindOrchestrators(graph, "Copy_To_Dataverse");
-    expect(dataverse.ancestors[0].root).toBe("Test_Orchestrator");
-    expect(dataverse.ancestors[0].depth).toBe(1);
+    const dvRoots = dataverse.ancestors.map((a) => a.root).sort();
+    expect(dvRoots).toContain("Test_Orchestrator");
+    expect(dvRoots).toContain("Dest_Query_Test");
   });
 
   it("reports pipeline name in result", () => {
@@ -81,12 +80,11 @@ describe("handleFindOrchestrators", () => {
 
     const result = handleFindOrchestrators(graph, "Copy_To_Staging");
     expect(result.isRoot).toBe(false);
-    expect(result.ancestors).toHaveLength(1);
-    expect(result.ancestors[0]).toEqual({
-      root: "Grand_Orchestrator",
-      chain: ["Grand_Orchestrator", "Test_Orchestrator", "Copy_To_Staging"],
-      depth: 2,
-    });
+    // Copy_To_Staging is reachable via Grand_Orchestrator→Test_Orchestrator and also Dest_Query_Test
+    const grandChain = result.ancestors.find((a) => a.root === "Grand_Orchestrator");
+    expect(grandChain).toBeDefined();
+    expect(grandChain!.chain).toEqual(["Grand_Orchestrator", "Test_Orchestrator", "Copy_To_Staging"]);
+    expect(grandChain!.depth).toBe(2);
   });
 
   it("handles multiple roots (diamond ancestry)", () => {
@@ -109,9 +107,10 @@ describe("handleFindOrchestrators", () => {
 
     const result = handleFindOrchestrators(graph, "Copy_To_Staging");
     expect(result.isRoot).toBe(false);
-    expect(result.ancestors).toHaveLength(2);
+    // Dest_Query_Test, Second_Orchestrator, Test_Orchestrator all reach Copy_To_Staging
+    expect(result.ancestors).toHaveLength(3);
 
     const roots = result.ancestors.map((a) => a.root).sort();
-    expect(roots).toEqual(["Second_Orchestrator", "Test_Orchestrator"]);
+    expect(roots).toEqual(["Dest_Query_Test", "Second_Orchestrator", "Test_Orchestrator"]);
   });
 });

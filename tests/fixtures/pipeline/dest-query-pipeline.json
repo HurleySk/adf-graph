@@ -1,0 +1,61 @@
+{
+  "name": "Dest_Query_Test",
+  "properties": {
+    "parameters": {},
+    "activities": [
+      {
+        "name": "Load Organizations",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Dataverse",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "dest_query": "SELECT org_id AS alm_orgid, org_name AS alm_name, org_code AS alm_orgcode, bad_col AS nonexistent_attr, status AS statecode FROM dbo.Org_Staging",
+            "dataverse_entity_name": "alm_organization"
+          }
+        }
+      },
+      {
+        "name": "Load Orgs With Status",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          {
+            "activity": "Load Organizations",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Dataverse",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "dest_query": "SELECT org_id AS alm_orgid, CASE WHEN status = 'Active' THEN 1 WHEN status = 'Closed' THEN 999 ELSE 2 END AS statuscode FROM dbo.Org_Staging",
+            "dataverse_entity_name": "alm_organization"
+          }
+        }
+      },
+      {
+        "name": "No Dest Query Activity",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Staging",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_query": "SELECT * FROM dbo.SomeTable"
+          }
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

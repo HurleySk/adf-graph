@@ -9,9 +9,9 @@
       "description": "Organization entity",
       "primaryId": "alm_organizationid",
       "primaryName": "alm_name",
-      "attributeCount": 5,
+      "attributeCount": 6,
       "file": "alm_organization.json",
-      "attributes": "alm_organizationid, alm_name, alm_orgcode, alm_orgtype, createdon"
+      "attributes": "alm_organizationid, alm_name, alm_orgcode, alm_orgtype, createdon, statuscode"
     },
     {
       "logicalName": "businessunit",

@@ -32,8 +32,8 @@ describe("parseSchemaIndex", () => {
   it("creates attribute nodes for each attribute in an entity", () => {
     const result = parseSchemaIndex(schemaPath);
     const attrNodes = result.nodes.filter((n) => n.type === NodeType.DataverseAttribute);
-    // alm_organization has 5 attributes, businessunit has 3
-    expect(attrNodes.length).toBe(8);
+    // alm_organization has 6 attributes, businessunit has 3
+    expect(attrNodes.length).toBe(9);
     expect(attrNodes.map((n) => n.id)).toContain(
       "dataverse_attribute:alm_organization.alm_name"
     );
@@ -45,7 +45,7 @@ describe("parseSchemaIndex", () => {
   it("creates HasAttribute edges from entity to each attribute", () => {
     const result = parseSchemaIndex(schemaPath);
     const hasAttrEdges = result.edges.filter((e) => e.type === EdgeType.HasAttribute);
-    expect(hasAttrEdges.length).toBe(8);
+    expect(hasAttrEdges.length).toBe(9);
     const orgToName = hasAttrEdges.find(
       (e) =>
         e.from === "dataverse_entity:alm_organization" &&
@@ -64,7 +64,7 @@ describe("parseSchemaIndex", () => {
     expect(orgNode!.metadata.entitySetName).toBe("alm_organizations");
     expect(orgNode!.metadata.primaryId).toBe("alm_organizationid");
     expect(orgNode!.metadata.primaryName).toBe("alm_name");
-    expect(orgNode!.metadata.attributeCount).toBe(5);
+    expect(orgNode!.metadata.attributeCount).toBe(6);
     expect(orgNode!.metadata.schemaFile).toBe("alm_organization.json");
   });
 
@@ -124,6 +124,30 @@ describe("loadEntityDetail", () => {
   it("returns null for nonexistent file", () => {
     const detail = loadEntityDetail(schemaPath, "does_not_exist.json");
     expect(detail).toBeNull();
+  });
+
+  it("loads OptionSet data from enriched attributes", () => {
+    const detail = loadEntityDetail(schemaPath, "alm_organization.json");
+    expect(detail).not.toBeNull();
+    const orgType = detail!.attributes.find((a) => a.logicalName === "alm_orgtype");
+    expect(orgType).toBeDefined();
+    expect(orgType!.optionSet).toBeDefined();
+    expect(orgType!.optionSet).toHaveLength(2);
+    expect(orgType!.optionSet![0]).toMatchObject({ value: 100000000, label: "Government" });
+    expect(orgType!.optionSet![1]).toMatchObject({ value: 100000001, label: "Commercial" });
+
+    const statuscode = detail!.attributes.find((a) => a.logicalName === "statuscode");
+    expect(statuscode).toBeDefined();
+    expect(statuscode!.optionSet).toHaveLength(2);
+    expect(statuscode!.optionSet![0]).toMatchObject({ value: 1, label: "Active" });
+  });
+
+  it("returns undefined optionSet for attributes without OptionSet data", () => {
+    const detail = loadEntityDetail(schemaPath, "alm_organization.json");
+    expect(detail).not.toBeNull();
+    const alm_name = detail!.attributes.find((a) => a.logicalName === "alm_name");
+    expect(alm_name).toBeDefined();
+    expect(alm_name!.optionSet).toBeUndefined();
   });
 
   it("caches results across repeated calls", () => {
