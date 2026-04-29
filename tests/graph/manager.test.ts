@@ -411,5 +411,21 @@ describe("GraphManager", () => {
       mgr.addEnvironment("rt", fixtureRoot, undefined, schemaPath);
       expect(mgr.getSchemaPath("rt")).toBe(schemaPath);
     });
+
+    it("getSchemaPath resolves through +overlays suffix to base environment", () => {
+      const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
+      const config: AdfGraphConfig = {
+        environments: {
+          test: {
+            path: fixtureRoot,
+            default: true,
+            schemaPath,
+            overlays: [join(fixtureRoot, "overlay-structured")],
+          },
+        },
+      };
+      const mgr = new GraphManager(config);
+      expect(mgr.getSchemaPath("test+overlays")).toBe(schemaPath);
+    });
   });
 });

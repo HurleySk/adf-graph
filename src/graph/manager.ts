@@ -311,9 +311,12 @@ export class GraphManager {
 
   /** Resolve the schemaPath for an environment (config takes priority over runtime). */
   private resolveSchemaPath(envName: string): string | undefined {
-    const cfg = this.config.environments[envName];
+    const baseName = envName.endsWith(OVERLAY_SUFFIX)
+      ? envName.slice(0, -OVERLAY_SUFFIX.length)
+      : envName;
+    const cfg = this.config.environments[baseName];
     if (cfg?.schemaPath) return cfg.schemaPath;
-    const rt = this.runtimeEnvs.get(envName);
+    const rt = this.runtimeEnvs.get(baseName);
     return rt?.schemaPath;
   }
 

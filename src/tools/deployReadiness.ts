@@ -128,7 +128,7 @@ function walkDependencies(
   const node = graph.getNode(nodeId);
 
   for (const edge of edges) {
-    if (edge.type === EdgeType.MapsColumn || edge.type === EdgeType.DependsOn) continue;
+    if (edge.type === EdgeType.MapsColumn || edge.type === EdgeType.DependsOn || edge.type === EdgeType.HasAttribute) continue;
 
     const targetId = edge.to;
     if (visited.has(targetId)) continue;
