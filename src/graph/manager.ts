@@ -1,5 +1,8 @@
+import { existsSync, statSync } from "fs";
+import { join } from "path";
 import { AdfGraphConfig, EnvironmentConfig } from "../config.js";
 import { OVERLAY_SUFFIX } from "../constants.js";
+import { clearEntityDetailCache } from "../parsers/dataverseSchema.js";
 import { buildGraph } from "./builder.js";
 import { Graph } from "./model.js";
 import { scanOverlayPath, mergeOverlayInto } from "./overlay.js";
@@ -33,7 +36,10 @@ export class GraphManager {
   private runtimeOverlays: Map<string, string[]> = new Map();
 
   /** Runtime environments added via addEnvironment(). */
-  private runtimeEnvs: Map<string, { path: string; overlays: string[] }> = new Map();
+  private runtimeEnvs: Map<string, { path: string; overlays: string[]; schemaPath?: string }> = new Map();
+
+  /** Tracks the mtime of each environment's schema _index.json at last build time. */
+  private schemaIndexMtimes: Map<string, number> = new Map();
 
   constructor(config: AdfGraphConfig) {
     this.config = config;
@@ -61,8 +67,9 @@ export class GraphManager {
       );
     }
 
+    const schemaPath = this.resolveSchemaPath(envName);
     const existing = this.graphs.get(envName);
-    if (existing && !existing.staleness.isStale()) {
+    if (existing && !existing.staleness.isStale() && !this.isSchemaStale(envName, schemaPath)) {
       return {
         graph: existing.graph,
         warnings: existing.warnings,
@@ -71,11 +78,13 @@ export class GraphManager {
     }
 
     // Build (or rebuild) graph for this environment
-    const result = buildGraph(envPath);
+    const result = buildGraph(envPath, schemaPath);
 
     // Each environment keeps its own staleness checker
     const staleness = existing?.staleness ?? new StalenessChecker(envPath);
     staleness.markBuilt();
+    this.markSchemaBuilt(envName, schemaPath);
+    clearEntityDetailCache();
 
     const state: EnvState = {
       graph: result.graph,
@@ -98,6 +107,11 @@ export class GraphManager {
   /** Return the name of the default environment. */
   getDefaultEnvironment(): string {
     return this.defaultEnv;
+  }
+
+  /** Return the configured schemaPath for an environment, if any. */
+  getSchemaPath(envName: string): string | undefined {
+    return this.resolveSchemaPath(envName);
   }
 
   /** List all environments with stats (graph built lazily — unbuilt envs show null counts). */
@@ -197,7 +211,7 @@ export class GraphManager {
   // ── Runtime environment management ──────────────────────────────────
 
   /** Register a new runtime environment. */
-  addEnvironment(name: string, path: string, overlays?: string[]): void {
+  addEnvironment(name: string, path: string, overlays?: string[], schemaPath?: string): void {
     if (name.includes("+")) {
       throw new Error(`adf-graph: environment name '${name}' cannot contain '+'`);
     }
@@ -207,7 +221,7 @@ export class GraphManager {
     if (this.runtimeEnvs.has(name)) {
       throw new Error(`adf-graph: runtime environment '${name}' already exists`);
     }
-    this.runtimeEnvs.set(name, { path, overlays: overlays ?? [] });
+    this.runtimeEnvs.set(name, { path, overlays: overlays ?? [], schemaPath });
     if (overlays && overlays.length > 0) {
       // Store as runtime overlays for consistency
       this.runtimeOverlays.set(name, [...overlays]);
@@ -293,6 +307,39 @@ export class GraphManager {
     this.graphs.set(mergedName, state);
 
     return { graph: merged, warnings: allWarnings, buildTimeMs };
+  }
+
+  /** Resolve the schemaPath for an environment (config takes priority over runtime). */
+  private resolveSchemaPath(envName: string): string | undefined {
+    const cfg = this.config.environments[envName];
+    if (cfg?.schemaPath) return cfg.schemaPath;
+    const rt = this.runtimeEnvs.get(envName);
+    return rt?.schemaPath;
+  }
+
+  private isSchemaStale(envName: string, schemaPath?: string): boolean {
+    if (!schemaPath) return false;
+    const indexPath = join(schemaPath, "..", "_index.json");
+    if (!existsSync(indexPath)) return false;
+    try {
+      const mtime = statSync(indexPath).mtimeMs;
+      const lastBuilt = this.schemaIndexMtimes.get(envName);
+      return lastBuilt === undefined || mtime > lastBuilt;
+    } catch {
+      return false;
+    }
+  }
+
+  private markSchemaBuilt(envName: string, schemaPath?: string): void {
+    if (!schemaPath) return;
+    const indexPath = join(schemaPath, "..", "_index.json");
+    if (!existsSync(indexPath)) return;
+    try {
+      const mtime = statSync(indexPath).mtimeMs;
+      this.schemaIndexMtimes.set(envName, mtime);
+    } catch {
+      // ignore
+    }
   }
 
   /** Resolve the filesystem path for an environment name (config or runtime). */

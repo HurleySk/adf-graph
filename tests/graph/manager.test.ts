@@ -3,6 +3,7 @@ import { join } from "path";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "fs";
 import { GraphManager } from "../../src/graph/manager.js";
 import type { AdfGraphConfig } from "../../src/config.js";
+import { NodeType } from "../../src/graph/model.js";
 
 const fixtureRoot = join(import.meta.dirname, "../fixtures");
 const overlayStructuredDir = join(fixtureRoot, "overlay-structured");
@@ -337,6 +338,78 @@ describe("GraphManager", () => {
       mgr.addEnvironment("rt", fixtureRoot);
       const { graph } = mgr.ensureGraph("rt");
       expect(graph.stats().nodeCount).toBeGreaterThan(0);
+    });
+  });
+
+  describe("schema integration", () => {
+    it("passes schemaPath to builder when configured", () => {
+      const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
+      const config: AdfGraphConfig = {
+        environments: {
+          test: {
+            path: join(import.meta.dirname, "../fixtures"),
+            default: true,
+            schemaPath,
+          },
+        },
+      };
+      const mgr = new GraphManager(config);
+      const { graph } = mgr.ensureGraph("test");
+      const entities = graph.getNodesByType(NodeType.DataverseEntity);
+      expect(entities.some((n) => n.metadata.displayName === "Organization")).toBe(true);
+    });
+
+    it("builds without schema when schemaPath is not configured", () => {
+      const config: AdfGraphConfig = {
+        environments: {
+          test: {
+            path: join(import.meta.dirname, "../fixtures"),
+            default: true,
+          },
+        },
+      };
+      const mgr = new GraphManager(config);
+      const { graph } = mgr.ensureGraph("test");
+      const attrs = graph.getNodesByType(NodeType.DataverseAttribute);
+      expect(attrs).toHaveLength(0);
+    });
+
+    it("getSchemaPath returns schemaPath from config", () => {
+      const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
+      const config: AdfGraphConfig = {
+        environments: {
+          test: {
+            path: join(import.meta.dirname, "../fixtures"),
+            schemaPath,
+          },
+        },
+      };
+      const mgr = new GraphManager(config);
+      expect(mgr.getSchemaPath("test")).toBe(schemaPath);
+    });
+
+    it("getSchemaPath returns undefined when schemaPath is not configured", () => {
+      const config: AdfGraphConfig = {
+        environments: {
+          test: {
+            path: join(import.meta.dirname, "../fixtures"),
+          },
+        },
+      };
+      const mgr = new GraphManager(config);
+      expect(mgr.getSchemaPath("test")).toBeUndefined();
+    });
+
+    it("addEnvironment accepts schemaPath and getSchemaPath returns it", () => {
+      const config: AdfGraphConfig = {
+        environments: {
+          main: { path: fixtureRoot },
+        },
+      };
+      const mgr = new GraphManager(config);
+      const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
+      mgr.addEnvironment("rt", fixtureRoot, undefined, schemaPath);
+      expect(mgr.getSchemaPath("rt")).toBe(schemaPath);
     });
   });
 });
