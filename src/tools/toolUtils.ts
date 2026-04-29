@@ -1,6 +1,8 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
 import { makeNodeId } from "../utils/nodeId.js";
 import { asString } from "../utils/expressionValue.js";
+import { loadEntityDetail } from "../parsers/dataverseSchema.js";
+import { getParameterDefs } from "../graph/nodeMetadata.js";
 
 export interface PipelineLookupSuccess {
   node: GraphNode;
@@ -59,4 +61,64 @@ export function resolveEntityName(
   }
 
   return null;
+}
+
+export function getEntityAttributes(
+  graph: Graph,
+  entityName: string,
+  schemaPath?: string,
+): Set<string> | null {
+  const entityNodeId = `${NodeType.DataverseEntity}:${entityName}`;
+  const entityNode = graph.getNode(entityNodeId);
+  if (!entityNode) return null;
+
+  const attrs = new Set<string>();
+
+  const outgoing = graph.getOutgoing(entityNodeId);
+  for (const edge of outgoing) {
+    if (edge.type !== EdgeType.HasAttribute) continue;
+    const attrNode = graph.getNode(edge.to);
+    if (attrNode) {
+      const name = attrNode.name.includes(".") ? attrNode.name.split(".").pop()! : attrNode.name;
+      attrs.add(name.toLowerCase());
+    }
+  }
+
+  if (schemaPath && entityNode.metadata.schemaFile) {
+    const detail = loadEntityDetail(schemaPath, entityNode.metadata.schemaFile as string);
+    if (detail) {
+      for (const attr of detail.attributes) {
+        attrs.add(attr.logicalName.toLowerCase());
+      }
+    }
+  }
+
+  return attrs;
+}
+
+export interface DestQueryDefaults {
+  destQuery: string;
+  entityName: string;
+  pipelineName: string;
+  pipelineId: string;
+}
+
+export function resolveDestQueryDefaults(
+  pipelineNode: GraphNode,
+): DestQueryDefaults | null {
+  const paramDefs = getParameterDefs(pipelineNode);
+  const destQueryParam = paramDefs.find((p) => p.name === "dest_query");
+  const destQueryDefault = asString(destQueryParam?.defaultValue);
+  if (!destQueryDefault || destQueryDefault.startsWith("@")) return null;
+
+  const entityParam = paramDefs.find((p) => p.name === "dataverse_entity_name");
+  const entityDefault = asString(entityParam?.defaultValue);
+  if (!entityDefault || entityDefault.startsWith("@")) return null;
+
+  return {
+    destQuery: destQueryDefault,
+    entityName: entityDefault,
+    pipelineName: pipelineNode.name,
+    pipelineId: pipelineNode.id,
+  };
 }

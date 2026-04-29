@@ -1,8 +1,6 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
-import { lookupPipelineNode, resolveEntityName } from "./toolUtils.js";
-import { loadEntityDetail } from "../parsers/dataverseSchema.js";
+import { lookupPipelineNode, resolveEntityName, getEntityAttributes, resolveDestQueryDefaults } from "./toolUtils.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
-import { getParameterDefs } from "../graph/nodeMetadata.js";
 import { asString } from "../utils/expressionValue.js";
 
 const SYSTEM_ATTRIBUTES = new Set([
@@ -40,41 +38,7 @@ export interface ValidatePipelineResult {
   error?: string;
 }
 
-function getEntityAttributes(
-  graph: Graph,
-  entityName: string,
-  schemaPath?: string,
-): Set<string> | null {
-  const entityNodeId = `${NodeType.DataverseEntity}:${entityName}`;
-  const entityNode = graph.getNode(entityNodeId);
-  if (!entityNode) return null;
-
-  const attrs = new Set<string>();
-
-  // From graph HasAttribute edges
-  const outgoing = graph.getOutgoing(entityNodeId);
-  for (const edge of outgoing) {
-    if (edge.type !== EdgeType.HasAttribute) continue;
-    const attrNode = graph.getNode(edge.to);
-    if (attrNode) {
-      const name = attrNode.name.includes(".") ? attrNode.name.split(".").pop()! : attrNode.name;
-      attrs.add(name.toLowerCase());
-    }
-  }
-
-  if (schemaPath && entityNode.metadata.schemaFile) {
-    const detail = loadEntityDetail(schemaPath, entityNode.metadata.schemaFile as string);
-    if (detail) {
-      for (const attr of detail.attributes) {
-        attrs.add(attr.logicalName.toLowerCase());
-      }
-    }
-  }
-
-  return attrs;
-}
-
-function classifyAlias(
+export function classifyAlias(
   alias: string,
   entityAttrs: Set<string> | null,
 ): ColumnValidation {
@@ -112,7 +76,6 @@ export function validateDestQueryActivity(
 
   const entityAttrs = getEntityAttributes(graph, entityName, schemaPath);
   const entityFound = entityAttrs !== null;
-
   const columns = parseResult.aliases.map((a) => classifyAlias(a.alias, entityAttrs));
 
   return {
@@ -133,32 +96,25 @@ export function validatePipelineDefaults(
   pipelineNode: GraphNode,
   schemaPath?: string,
 ): { validation: ActivityValidation; warnings: string[] } | null {
-  const paramDefs = getParameterDefs(pipelineNode);
-  const destQueryParam = paramDefs.find((p) => p.name === "dest_query");
-  const destQueryDefault = asString(destQueryParam?.defaultValue);
-  if (!destQueryDefault || destQueryDefault.startsWith("@")) return null;
-
-  const entityParam = paramDefs.find((p) => p.name === "dataverse_entity_name");
-  const entityDefault = asString(entityParam?.defaultValue);
-  if (!entityDefault || entityDefault.startsWith("@")) return null;
+  const defaults = resolveDestQueryDefaults(pipelineNode);
+  if (!defaults) return null;
 
   const warnings: string[] = [];
-  const parseResult = extractDestQueryAliases(destQueryDefault);
+  const parseResult = extractDestQueryAliases(defaults.destQuery);
   warnings.push(...parseResult.warnings);
 
-  const entityAttrs = getEntityAttributes(graph, entityDefault, schemaPath);
+  const entityAttrs = getEntityAttributes(graph, defaults.entityName, schemaPath);
   const entityFound = entityAttrs !== null;
-
   const columns = parseResult.aliases.map((a) => classifyAlias(a.alias, entityAttrs));
 
   return {
     validation: {
-      activityId: pipelineNode.id,
-      activityName: `${pipelineNode.name} (parameter default)`,
-      entityName: entityDefault,
+      activityId: defaults.pipelineId,
+      activityName: `${defaults.pipelineName} (parameter default)`,
+      entityName: defaults.entityName,
       entityFound,
       columns,
-      destQuery: destQueryDefault,
+      destQuery: defaults.destQuery,
     },
     warnings,
   };
@@ -183,7 +139,6 @@ export function handleValidatePipeline(
   const warnings: string[] = [];
   const activities: ActivityValidation[] = [];
 
-  // Find all activities contained by this pipeline
   const contained = graph.getOutgoing(lookup.id);
   for (const edge of contained) {
     if (edge.type !== EdgeType.Contains) continue;

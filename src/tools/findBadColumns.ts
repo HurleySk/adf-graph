@@ -1,5 +1,5 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { validateDestQueryActivity, validatePipelineDefaults } from "./validatePipeline.js";
+import { Graph, NodeType } from "../graph/model.js";
+import { handleValidatePipeline } from "./validatePipeline.js";
 
 export interface BadColumnEntry {
   pipeline: string;
@@ -29,43 +29,19 @@ export function handleFindBadColumns(
   const pipelines = graph.getNodesByType(NodeType.Pipeline);
 
   for (const pipeline of pipelines) {
-    const contained = graph.getOutgoing(pipeline.id);
-    for (const edge of contained) {
-      if (edge.type !== EdgeType.Contains) continue;
-      const actNode = graph.getNode(edge.to);
-      if (!actNode || actNode.type !== NodeType.Activity) continue;
+    const result = handleValidatePipeline(graph, pipeline.name, schemaPath);
+    warnings.push(...result.warnings);
 
-      const result = validateDestQueryActivity(graph, actNode, schemaPath);
-      if (!result) continue;
-
-      warnings.push(...result.warnings);
-
-      const badCols = result.validation.columns
+    for (const activity of result.activities) {
+      const badCols = activity.columns
         .filter((c) => c.status === "invalid")
         .map((c) => c.alias);
 
       if (badCols.length > 0) {
         entries.push({
           pipeline: pipeline.name,
-          activity: result.validation.activityName,
-          entity: result.validation.entityName,
-          badColumns: badCols,
-        });
-        pipelinesWithIssues.add(pipeline.name);
-      }
-    }
-
-    const defaultResult = validatePipelineDefaults(graph, pipeline, schemaPath);
-    if (defaultResult) {
-      warnings.push(...defaultResult.warnings);
-      const badCols = defaultResult.validation.columns
-        .filter((c) => c.status === "invalid")
-        .map((c) => c.alias);
-      if (badCols.length > 0) {
-        entries.push({
-          pipeline: pipeline.name,
-          activity: defaultResult.validation.activityName,
-          entity: defaultResult.validation.entityName,
+          activity: activity.activityName,
+          entity: activity.entityName,
           badColumns: badCols,
         });
         pipelinesWithIssues.add(pipeline.name);
