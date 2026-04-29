@@ -30,6 +30,7 @@ import { handleStagingDependencies } from "./tools/stagingDependencies.js";
 import { handleEntityCoverage } from "./tools/entityCoverage.js";
 import { handleParameterCallers } from "./tools/parameterCallers.js";
 import { handleDiffStaging } from "./tools/diffStaging.js";
+import { handleGenerateScope } from "./tools/generateScope.js";
 
 const environmentParam = z
   .string()
@@ -451,5 +452,27 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     "Remove a runtime environment. Config-based environments cannot be removed via this tool.",
     { name: z.string().describe("Environment name to remove") },
     async ({ name }) => json(handleRemoveEnvironment(manager, name)),
+  );
+
+  server.tool(
+    "graph_generate_scope",
+    "Generate a scope manifest by walking orchestrator pipeline trees. Collects all reachable pipelines, stored procedures, tables, and datasets. Optionally detects orphan pipelines in a specified ADF folder.",
+    {
+      roots: z.array(z.string()).optional().describe("Root orchestrator pipeline names. Defaults to the 3 W3 roots."),
+      folder: z.string().optional().describe("ADF folder name to cross-check for orphan pipelines (e.g. 'Wave 3')"),
+      environment: environmentParam,
+    },
+    async ({ roots, folder, environment }) => {
+      const build = manager.ensureGraph(environment);
+      const defaultRoots = [
+        "onprem_NightlyOrganizationLoad_v2",
+        "onprem_Orchestration_DeltaLoad",
+        "onprem_Orchestration_Migration_Wave3",
+      ];
+      return json(handleGenerateScope(build.graph, {
+        roots: roots ?? defaultRoots,
+        folder,
+      }));
+    },
   );
 }
