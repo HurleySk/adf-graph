@@ -1,5 +1,6 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { extractTablesFromSql } from "../parseResult.js";
+import { extractWhereClause } from "../sqlWhereParser.js";
 import { asString, asNonDynamic } from "../../utils/expressionValue.js";
 import { makeEntityId, makeTableId, makeDatasetId, makeNodeId } from "../../utils/nodeId.js";
 
@@ -92,6 +93,11 @@ export function parseCopyActivity(
       });
     }
     activityNode.metadata.sqlQuery = sqlText;
+    const whereResult = extractWhereClause(sqlText);
+    if (whereResult) {
+      activityNode.metadata.sqlWhereClause = whereResult.raw;
+      activityNode.metadata.sqlFilterConditions = whereResult.conditions;
+    }
   }
 
   const fetchXml = source?.query;

@@ -1,0 +1,64 @@
+{
+  "name": "CDC_OnPrem_Template",
+  "properties": {
+    "parameters": {
+      "source_object_name": { "type": "String", "defaultValue": "" },
+      "dest_object_name": { "type": "String", "defaultValue": "" },
+      "source_schema_name": { "type": "String", "defaultValue": "dbo" },
+      "dest_schema_name": { "type": "String", "defaultValue": "dbo" },
+      "dataverse_entity_name": { "type": "String", "defaultValue": "" },
+      "source_query": { "type": "String", "defaultValue": "" },
+      "dest_query": { "type": "String", "defaultValue": "" },
+      "pre_copy_script": { "type": "String", "defaultValue": "" },
+      "cdc_current_table": { "type": "String", "defaultValue": "" },
+      "cdc_historical_table": { "type": "String", "defaultValue": "" },
+      "cdc_source_table_name": { "type": "String", "defaultValue": "" },
+      "cdc_pending_table_name": { "type": "String", "defaultValue": "" },
+      "stored_procedure": { "type": "String", "defaultValue": "" },
+      "alternatekeyName": { "type": "String", "defaultValue": "" }
+    },
+    "activities": [
+      {
+        "name": "Copy CDC Current",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlServerSource",
+            "sqlReaderQuery": "SELECT DISTINCT a.Work_Item_id, b.start_lsn FROM cdc.dbo_Work_Item_CT a JOIN cdc.lsn_time_mapping b ON a.__$start_lsn = b.start_lsn"
+          },
+          "sink": { "type": "AzureSqlSink" }
+        },
+        "inputs": [],
+        "outputs": []
+      },
+      {
+        "name": "Copy Source To Staging",
+        "type": "Copy",
+        "dependsOn": [{ "activity": "Copy CDC Current", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "SqlServerSource",
+            "sqlReaderQuery": "SELECT * FROM dbo.Work_Item WHERE is_active = 1 AND Work_Item_Type_fk NOT IN (3, 4, 5)"
+          },
+          "sink": { "type": "AzureSqlSink" }
+        },
+        "inputs": [],
+        "outputs": []
+      },
+      {
+        "name": "Run Cleanup SP",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [{ "activity": "Copy Source To Staging", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "storedProcedureName": "[dbo].[p_InsertProcessedTransactionsAndDelete]",
+          "storedProcedureParameters": {
+            "TableA": { "value": "@pipeline().parameters.cdc_current_table", "type": "Expression" },
+            "TableB": { "value": "@pipeline().parameters.cdc_historical_table", "type": "Expression" }
+          }
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

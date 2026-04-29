@@ -1,0 +1,62 @@
+{
+  "name": "DeltaLoad_Orchestrator",
+  "properties": {
+    "parameters": {},
+    "activities": [
+      {
+        "name": "Load Work Items",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "CDC_OnPrem_Template",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_object_name": "Work_Item",
+            "dest_object_name": "Agenda_Work_Item_Staging",
+            "source_schema_name": "dbo",
+            "dest_schema_name": "dbo",
+            "dataverse_entity_name": "pcx_workpackage",
+            "source_query": "SELECT wi.Work_Item_id, wi.Work_Item_Name FROM dbo.Work_Item wi WHERE wi.is_active = 1",
+            "dest_query": "SELECT a.Work_Item_id AS pcx_workitemid, a.Work_Item_Name AS pcx_name FROM dbo.Agenda_Work_Item_Staging a WHERE a.Work_Item_Type_fk NOT IN (3,4,5,7) AND a.Status_fk = 3 OR a.Work_Item_id IN (SELECT Work_Item_id FROM dbo.Agenda_Additional_Work_Item_Staging) OR a.Work_Item_id IN (SELECT Work_Item_id FROM dbo.DataVerse_pcx_workpackage_Staging) AND a.Work_Item_id IN (SELECT Work_Item_id FROM dbo.CDC_Work_Item_Current)",
+            "pre_copy_script": "EXEC dbo.p_Delete_Staging_Records_From_Table @table = 'Agenda_Work_Item_Staging'",
+            "cdc_current_table": "CDC_Work_Item_Current",
+            "cdc_historical_table": "CDC_Work_Item_Historical",
+            "cdc_source_table_name": "dbo_Work_Item_CT",
+            "cdc_pending_table_name": "",
+            "stored_procedure": "[dbo].[p_InsertProcessedTransactionsAndDelete]",
+            "alternatekeyName": "pcx_workitemid"
+          }
+        }
+      },
+      {
+        "name": "Load Work Sets",
+        "type": "ExecutePipeline",
+        "dependsOn": [{ "activity": "Load Work Items", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "CDC_OnPrem_Template",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_object_name": "Work_Set",
+            "dest_object_name": "Agenda_Work_Set_Staging",
+            "source_schema_name": "dbo",
+            "dest_schema_name": "dbo",
+            "dataverse_entity_name": "alm_workset",
+            "source_query": "SELECT ws.Work_Set_id, ws.Work_Set_Name FROM dbo.Work_Set ws",
+            "dest_query": "SELECT a.Work_Set_id AS alm_worksetid, a.Work_Set_Name AS alm_name FROM dbo.Agenda_Work_Set_Staging a",
+            "cdc_current_table": "CDC_Work_Set_Current",
+            "cdc_historical_table": "CDC_Work_Set_Historical",
+            "cdc_source_table_name": "dbo_Work_Set_CT",
+            "stored_procedure": "[dbo].[p_DeleteProcessedTransactions]"
+          }
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

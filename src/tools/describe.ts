@@ -2,8 +2,9 @@ import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseNodeId } from "../utils/nodeId.js";
 import { lookupPipelineNode } from "./toolUtils.js";
+import { resolveChildParameters, type ResolvedChildPipeline } from "../utils/parameterResolver.js";
 
-export type DescribeDepth = "summary" | "activities" | "full";
+export type DescribeDepth = "summary" | "activities" | "full" | "resolved";
 
 export interface ActivityInfo {
   name: string;
@@ -18,6 +19,7 @@ export interface ActivityInfo {
   storedProcedureName?: string;
   storedProcedureParameters?: Record<string, unknown>;
   pipelineParameters?: Record<string, unknown>;
+  resolvedChild?: ResolvedChildPipeline;
 }
 
 export { ParameterDef } from "../graph/nodeMetadata.js";
@@ -100,7 +102,7 @@ export function handleDescribePipeline(
     return result;
   }
 
-  const effectiveDepth = activity ? "full" : depth;
+  const effectiveDepth = activity ? "full" : (depth === "resolved" ? "resolved" : depth);
 
   // Recursively collect activities through the Contains tree
   function collectActivities(parentId: string, parentName?: string): ActivityInfo[] {
@@ -132,7 +134,7 @@ export function handleDescribePipeline(
         activityInfo.parentActivity = parentName;
       }
 
-      if (effectiveDepth === "full") {
+      if (effectiveDepth === "full" || effectiveDepth === "resolved") {
         const sources = actOutgoing
           .filter((e) => e.type === EdgeType.ReadsFrom || (e.type === EdgeType.UsesDataset && e.to.startsWith("dataset:")))
           .map((e) => e.to);
@@ -157,6 +159,11 @@ export function handleDescribePipeline(
         if (meta.storedProcedureName) activityInfo.storedProcedureName = meta.storedProcedureName;
         if (meta.storedProcedureParameters) activityInfo.storedProcedureParameters = meta.storedProcedureParameters;
         if (meta.pipelineParameters) activityInfo.pipelineParameters = meta.pipelineParameters;
+
+        if (effectiveDepth === "resolved" && meta.pipelineParameters && meta.executedPipeline) {
+          const resolved = resolveChildParameters(graph, activityNode);
+          if (resolved) activityInfo.resolvedChild = resolved;
+        }
       }
 
       collected.push(activityInfo);

@@ -31,6 +31,9 @@ import { handleEntityCoverage } from "./tools/entityCoverage.js";
 import { handleParameterCallers } from "./tools/parameterCallers.js";
 import { handleDiffStaging } from "./tools/diffStaging.js";
 import { handleGenerateScope } from "./tools/generateScope.js";
+import { handleFilterChain } from "./tools/filterChain.js";
+import { handleCdcAnalysis } from "./tools/cdcAnalysis.js";
+import { handleStagingPopulation } from "./tools/stagingPopulation.js";
 
 const environmentParam = z
   .string()
@@ -77,10 +80,10 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
 
   server.tool(
     "graph_describe_pipeline",
-    "Describe a pipeline: summary, activities, or full detail including column mappings. Optionally filter to a single named activity.",
+    "Describe a pipeline: summary, activities, full detail, or resolved (inlines parameter values for child pipeline calls, detects CDC patterns). Optionally filter to a single named activity.",
     {
       pipeline: z.string().describe("Pipeline name"),
-      depth: z.enum(["summary", "activities", "full"]).default("summary").describe("Level of detail to return"),
+      depth: z.enum(["summary", "activities", "full", "resolved"]).default("summary").describe("Level of detail. 'resolved' inlines parameter values for ExecutePipeline activities and detects CDC patterns."),
       activity: z.string().optional().describe("Optional activity name — returns full detail for just that activity"),
       environment: environmentParam,
     },
@@ -473,6 +476,47 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
         roots: roots ?? defaultRoots,
         folder,
       }));
+    },
+  );
+
+  // ── CDC / filter analysis tools ──────────────────────────────────────
+
+  server.tool(
+    "graph_filter_chain",
+    "Extract and display all WHERE/filter conditions across the pipeline chain for a given entity or table. Shows the complete filter path from source through staging to destination.",
+    {
+      entity: z.string().describe("Entity or table name to trace filters for (e.g. 'pcx_workpackage' or 'Work_Item')"),
+      environment: environmentParam,
+    },
+    async ({ entity, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleFilterChain(build.graph, entity));
+    },
+  );
+
+  server.tool(
+    "graph_cdc_analysis",
+    "Analyse CDC (Change Data Capture) pipeline configuration. Shows source CDC tables, staging tables (current/historical/pending), the full filter chain from source through staging to Dataverse, escape hatch conditions, and detects configuration gaps.",
+    {
+      pipeline: z.string().describe("Pipeline name (orchestrator or CDC child pipeline)"),
+      environment: environmentParam,
+    },
+    async ({ pipeline, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleCdcAnalysis(build.graph, pipeline));
+    },
+  );
+
+  server.tool(
+    "graph_staging_population",
+    "Cross-reference staging tables in a pipeline's dest_query. Maps which staging tables feed into the query, their expected role (CDC tracking, manual inclusion list, DV mirror), and how they are populated.",
+    {
+      pipeline: z.string().describe("Pipeline name"),
+      environment: environmentParam,
+    },
+    async ({ pipeline, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleStagingPopulation(build.graph, pipeline));
     },
   );
 }

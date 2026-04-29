@@ -33,3 +33,31 @@ export function extractTablesFromSql(sql: string): string[] {
   }
   return results;
 }
+
+export interface TableRef {
+  table: string;
+  depth: number;
+}
+
+/**
+ * Like extractTablesFromSql but captures tables at ALL parenthesis depths.
+ * Callers can distinguish main tables (depth 0) from subquery tables (depth > 0).
+ */
+export function extractAllTablesFromSql(sql: string): TableRef[] {
+  const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?\.\[?(\w+)\]?/gi;
+  const results: TableRef[] = [];
+
+  const depthArr = new Int8Array(sql.length);
+  let d = 0;
+  for (let i = 0; i < sql.length; i++) {
+    if (sql[i] === "(") d++;
+    depthArr[i] = d;
+    if (sql[i] === ")") d--;
+  }
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(sql)) !== null) {
+    results.push({ table: `${match[1]}.${match[2]}`, depth: depthArr[match.index] });
+  }
+  return results;
+}

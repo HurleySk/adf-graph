@@ -6,12 +6,12 @@
     "url": "https://github.com/HurleySk/adf-graph",
     "source": "github"
   },
-  "version": "1.5.0",
+  "version": "1.6.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "adf-graph",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "transport": {
         "type": "stdio"
       },
@@ -45,7 +45,11 @@
         { "name": "graph_staging_dependencies", "description": "Map shared staging table usage across pipelines with truncate detection" },
         { "name": "graph_entity_coverage", "description": "Show all pipelines writing to a Dataverse entity with per-pipeline column lists" },
         { "name": "graph_parameter_trace", "description": "Trace parameter values from parent to child pipelines via ExecutePipeline activities" },
-        { "name": "graph_diff_staging", "description": "Compare staged pipeline changes against deployed version with auto-detection" }
+        { "name": "graph_diff_staging", "description": "Compare staged pipeline changes against deployed version with auto-detection" },
+        { "name": "graph_generate_scope", "description": "Generate scope manifest from orchestrator pipeline trees, detect orphan pipelines" },
+        { "name": "graph_filter_chain", "description": "Extract and display all WHERE/filter conditions across the pipeline chain for an entity or table" },
+        { "name": "graph_cdc_analysis", "description": "Analyse CDC pipeline configuration: staging tables, filter chains, escape hatches, and gap detection" },
+        { "name": "graph_staging_population", "description": "Cross-reference staging tables in a pipeline's dest_query with role classification and usage tracking" }
       ],
       "environmentVariables": [
         {

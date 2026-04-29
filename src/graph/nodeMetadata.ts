@@ -1,4 +1,5 @@
 import { GraphNode } from "./model.js";
+import type { FilterCondition } from "../parsers/sqlWhereParser.js";
 
 export interface ParameterDef {
   name: string;
@@ -13,6 +14,8 @@ export interface PipelineMetadata {
 export interface ActivityMetadata {
   activityType: string;
   sqlQuery?: string;
+  sqlWhereClause?: string;
+  sqlFilterConditions?: FilterCondition[];
   fetchXmlQuery?: string;
   storedProcedureName?: string;
   storedProcedureParameters?: Record<string, unknown>;
@@ -40,6 +43,8 @@ export function getActivityMetadata(node: GraphNode): ActivityMetadata {
   return {
     activityType: (m.activityType as string) ?? "Unknown",
     sqlQuery: m.sqlQuery as string | undefined,
+    sqlWhereClause: m.sqlWhereClause as string | undefined,
+    sqlFilterConditions: m.sqlFilterConditions as FilterCondition[] | undefined,
     fetchXmlQuery: m.fetchXmlQuery as string | undefined,
     storedProcedureName: m.storedProcedureName as string | undefined,
     storedProcedureParameters: m.storedProcedureParameters as Record<string, unknown> | undefined,
