@@ -6,12 +6,12 @@
     "url": "https://github.com/HurleySk/adf-graph",
     "source": "github"
   },
-  "version": "0.9.3",
+  "version": "1.0.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "adf-graph",
-      "version": "0.9.3",
+      "version": "1.0.0",
       "transport": {
         "type": "stdio"
       },
@@ -19,6 +19,7 @@
         { "name": "graph_stats", "description": "Node/edge counts by type, build time, staleness flag" },
         { "name": "graph_find_consumers", "description": "All pipeline activities that read/write/call a given artifact" },
         { "name": "graph_describe_pipeline", "description": "Pipeline summary, activity list, or full detail with column mappings. Supports activity filter and nested container activities (Until/ForEach/IfCondition)." },
+        { "name": "graph_describe_entity", "description": "Describe a Dataverse entity: metadata, attributes, pipeline consumers. Full depth includes types and required levels from schema." },
         { "name": "graph_impact_analysis", "description": "All nodes affected upstream/downstream if an artifact changes" },
         { "name": "graph_data_lineage", "description": "Data flow paths for a Dataverse entity or staging table with optional column filter. SP column mappings include source/target table and transform expressions." },
         { "name": "graph_find_paths", "description": "All dependency paths between two named nodes" },

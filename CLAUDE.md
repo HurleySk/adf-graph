@@ -12,12 +12,12 @@ MCP server that builds a queryable dependency graph from ADF pipeline artifacts.
 
 - `src/config.ts` — Config loader (ADF_CONFIG / adf-graph.json / ADF_ROOT fallback)
 - `src/graph/model.ts` — Graph data structure (nodes, edges, adjacency lists)
-- `src/graph/builder.ts` — 4-pass graph builder (pipelines → datasets → SQL → enrichment)
+- `src/graph/builder.ts` — 5-pass graph builder (pipelines → datasets → linked services → SQL/SP → Dataverse schema → stubs)
 - `src/graph/staleness.ts` — File mtime tracking, rebuild-if-stale (multi-path aware)
 - `src/graph/overlay.ts` — Artifact type detection, overlay scanning (structured + loose), graph merge
-- `src/graph/manager.ts` — Multi-environment graph manager (lazy build, per-env staleness, overlay merge views)
-- `src/parsers/` — One parser per artifact type (pipeline, dataset, sql, columns)
-- `src/tools/` — One file per MCP tool (describe, lineage, search, diff, impact, consumers, paths, stats, overlay/env management)
+- `src/graph/manager.ts` — Multi-environment graph manager (lazy build, per-env staleness, schema staleness, overlay merge views)
+- `src/parsers/` — One parser per artifact type (pipeline, dataset, sql, columns, dataverseSchema)
+- `src/tools/` — One file per MCP tool (describe, describeEntity, lineage, search, diff, impact, consumers, paths, stats, validate, deployReadiness, overlay/env management)
 - `src/server.ts` — MCP server entry point, tool registration
 
 ## Configuration
@@ -46,6 +46,28 @@ Or set `ADF_CONFIG=/absolute/path/to/adf-graph.json` to use a file at an arbitra
 
 `ADF_ROOT` env var — path to a directory containing ADF artifacts (`pipeline/`, `dataset/`, etc.).
 Behaves exactly as before; creates a single environment named `"default"`.
+
+### Dataverse Schema
+
+Environments can have an optional `schemaPath` to integrate Dataverse entity metadata into the graph:
+
+```json
+{
+  "environments": {
+    "work-repo": {
+      "path": "C:/repos/work-repo",
+      "default": true,
+      "schemaPath": "C:/repos/boomerang/dataverse-schema/almwave3"
+    }
+  }
+}
+```
+
+- `schemaPath` points to an environment subdirectory containing per-entity JSON files (exported by the CLI's `DataverseSchemaPull`).
+- The `_index.json` in the parent directory is parsed at build time to create `DataverseEntity` and `DataverseAttribute` nodes with `HasAttribute` edges.
+- Per-entity files are lazy-loaded when tools need deep attribute detail (types, required levels, create/update flags).
+- Enables: `graph_describe_entity`, schema-aware validation, attribute-level lineage, and deploy-readiness schema checks.
+- Schema data is NOT overlayable — merged views inherit the base environment's schema.
 
 ### Overlays
 
