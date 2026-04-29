@@ -354,4 +354,19 @@ describe("extractTablesFromSql", () => {
     expect(tables).toContain("dbo.Org_Staging");
     expect(tables).toContain("dbo.LegacyOrg");
   });
+
+  it("excludes tables from WHERE EXISTS subqueries", () => {
+    const sql = "SELECT b.id FROM dbo.Work_Set b WHERE EXISTS (SELECT 1 FROM cdc.dbo_Work_Set_ct a WHERE a.id = b.id)";
+    const tables = extractTablesFromSql(sql);
+    expect(tables).toContain("dbo.Work_Set");
+    expect(tables).not.toContain("cdc.dbo_Work_Set_ct");
+  });
+
+  it("excludes tables from nested subqueries but keeps top-level JOINs", () => {
+    const sql = "SELECT a.id FROM dbo.Work_Set a LEFT JOIN dbo.Work_Set_FERC_Organization b ON a.id = b.fk WHERE a.id IN (SELECT fk FROM cdc.dbo_Work_Set_ct)";
+    const tables = extractTablesFromSql(sql);
+    expect(tables).toContain("dbo.Work_Set");
+    expect(tables).toContain("dbo.Work_Set_FERC_Organization");
+    expect(tables).not.toContain("cdc.dbo_Work_Set_ct");
+  });
 });
