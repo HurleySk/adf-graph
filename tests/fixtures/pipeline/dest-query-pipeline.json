@@ -41,6 +41,47 @@
         }
       },
       {
+        "name": "Load Expression Wrapped",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Dataverse",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "dest_query": {
+              "value": "SELECT org_id AS alm_orgid, org_name AS alm_name, bad_col AS nonexistent_attr FROM dbo.Org_Staging",
+              "type": "Expression"
+            },
+            "dataverse_entity_name": "alm_organization"
+          }
+        }
+      },
+      {
+        "name": "Load Expression Wrapped Status",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Dataverse",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "dest_query": {
+              "value": "SELECT org_id AS alm_orgid, CASE WHEN status = 'Active' THEN 1 WHEN status = 'Closed' THEN 999 ELSE 2 END AS statuscode FROM dbo.Org_Staging",
+              "type": "Expression"
+            },
+            "dataverse_entity_name": {
+              "value": "alm_organization",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
         "name": "No Dest Query Activity",
         "type": "ExecutePipeline",
         "dependsOn": [],

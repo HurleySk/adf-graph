@@ -62,6 +62,55 @@ describe("handleValidatePipeline", () => {
     expect(result.activities).toHaveLength(0);
   });
 
+  it("validates Expression-wrapped dest_query", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidatePipeline(graph, "Dest_Query_Test", schemaPath);
+
+    const exprWrapped = result.activities.find((a) => a.activityName === "Load Expression Wrapped");
+    expect(exprWrapped).toBeDefined();
+    expect(exprWrapped!.entityName).toBe("alm_organization");
+    expect(exprWrapped!.entityFound).toBe(true);
+
+    const alm_name = exprWrapped!.columns.find((c) => c.alias === "alm_name");
+    expect(alm_name).toBeDefined();
+    expect(alm_name!.status).toBe("valid");
+
+    const nonexistent = exprWrapped!.columns.find((c) => c.alias === "nonexistent_attr");
+    expect(nonexistent).toBeDefined();
+    expect(nonexistent!.status).toBe("invalid");
+  });
+
+  it("validates Expression-wrapped dataverse_entity_name", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidatePipeline(graph, "Dest_Query_Test", schemaPath);
+
+    const exprStatus = result.activities.find((a) => a.activityName === "Load Expression Wrapped Status");
+    expect(exprStatus).toBeDefined();
+    expect(exprStatus!.entityName).toBe("alm_organization");
+  });
+
+  it("validates pipeline-level dest_query parameter defaults", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidatePipeline(graph, "Dest_Query_Defaults_Test", schemaPath);
+
+    expect(result.error).toBeUndefined();
+
+    const defaultActivity = result.activities.find(
+      (a) => a.activityName === "Dest_Query_Defaults_Test (parameter default)"
+    );
+    expect(defaultActivity).toBeDefined();
+    expect(defaultActivity!.entityName).toBe("alm_organization");
+    expect(defaultActivity!.entityFound).toBe(true);
+
+    const alm_name = defaultActivity!.columns.find((c) => c.alias === "alm_name");
+    expect(alm_name).toBeDefined();
+    expect(alm_name!.status).toBe("valid");
+
+    const nonexistent = defaultActivity!.columns.find((c) => c.alias === "nonexistent_attr");
+    expect(nonexistent).toBeDefined();
+    expect(nonexistent!.status).toBe("invalid");
+  });
+
   it("produces correct summary counts", () => {
     const { graph } = buildGraph(fixtureRoot, schemaPath);
     const result = handleValidatePipeline(graph, "Dest_Query_Test", schemaPath);

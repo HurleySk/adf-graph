@@ -1,5 +1,5 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { validateDestQueryActivity } from "./validatePipeline.js";
+import { validateDestQueryActivity, validatePipelineDefaults } from "./validatePipeline.js";
 
 export interface BadColumnEntry {
   pipeline: string;
@@ -49,6 +49,23 @@ export function handleFindBadColumns(
           pipeline: pipeline.name,
           activity: result.validation.activityName,
           entity: result.validation.entityName,
+          badColumns: badCols,
+        });
+        pipelinesWithIssues.add(pipeline.name);
+      }
+    }
+
+    const defaultResult = validatePipelineDefaults(graph, pipeline, schemaPath);
+    if (defaultResult) {
+      warnings.push(...defaultResult.warnings);
+      const badCols = defaultResult.validation.columns
+        .filter((c) => c.status === "invalid")
+        .map((c) => c.alias);
+      if (badCols.length > 0) {
+        entries.push({
+          pipeline: pipeline.name,
+          activity: defaultResult.validation.activityName,
+          entity: defaultResult.validation.entityName,
           badColumns: badCols,
         });
         pipelinesWithIssues.add(pipeline.name);

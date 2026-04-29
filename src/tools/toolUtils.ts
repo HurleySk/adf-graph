@@ -1,5 +1,6 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
 import { makeNodeId } from "../utils/nodeId.js";
+import { asString } from "../utils/expressionValue.js";
 
 export interface PipelineLookupSuccess {
   node: GraphNode;
@@ -30,8 +31,8 @@ export function resolveEntityName(
 ): string | null {
   const params = activityNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
   if (params) {
-    const entityName = params.dataverse_entity_name;
-    if (typeof entityName === "string" && !entityName.startsWith("@")) {
+    const entityName = asString(params.dataverse_entity_name);
+    if (entityName && !entityName.startsWith("@")) {
       return entityName;
     }
   }

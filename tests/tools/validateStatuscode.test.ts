@@ -57,6 +57,32 @@ describe("handleValidateStatuscode", () => {
     expect(result.validations).toHaveLength(0);
   });
 
+  it("validates Expression-wrapped dest_query statuscode", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidateStatuscode(graph, "Dest_Query_Test", schemaPath);
+
+    const exprValidation = result.validations.find(
+      (v) => v.activityName === "Load Expression Wrapped Status" && v.alias === "statuscode"
+    );
+    expect(exprValidation).toBeDefined();
+    expect(exprValidation!.optionSetAvailable).toBe(true);
+    expect(exprValidation!.mappedValues).toContain(999);
+    expect(exprValidation!.invalidValues).toContain(999);
+  });
+
+  it("validates pipeline-level dest_query parameter default statuscode", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidateStatuscode(graph, "Dest_Query_Defaults_Test", schemaPath);
+
+    const defaultValidation = result.validations.find(
+      (v) => v.activityName === "Dest_Query_Defaults_Test (parameter default)"
+    );
+    expect(defaultValidation).toBeDefined();
+    expect(defaultValidation!.alias).toBe("statuscode");
+    expect(defaultValidation!.mappedValues).toContain(999);
+    expect(defaultValidation!.invalidValues).toContain(999);
+  });
+
   it("skips non-CASE statuscode aliases", () => {
     const { graph } = buildGraph(fixtureRoot, schemaPath);
     const result = handleValidateStatuscode(graph, "Dest_Query_Test", schemaPath);

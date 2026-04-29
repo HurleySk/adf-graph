@@ -2,6 +2,8 @@ import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode, resolveEntityName } from "./toolUtils.js";
 import { loadEntityDetail } from "../parsers/dataverseSchema.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
+import { getParameterDefs } from "../graph/nodeMetadata.js";
+import { asString } from "../utils/expressionValue.js";
 
 const SYSTEM_ATTRIBUTES = new Set([
   "statecode", "statuscode", "ownerid", "modifiedby", "createdby",
@@ -79,8 +81,8 @@ export function validateDestQueryActivity(
   const params = activityNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
   if (!params) return null;
 
-  const destQuery = params.dest_query;
-  if (typeof destQuery !== "string") return null;
+  const destQuery = asString(params.dest_query);
+  if (!destQuery) return null;
   if (destQuery.startsWith("@")) return null;
 
   const entityName = resolveEntityName(graph, activityNode);
@@ -120,6 +122,54 @@ export function validateDestQueryActivity(
   };
 }
 
+export function validatePipelineDefaults(
+  graph: Graph,
+  pipelineNode: GraphNode,
+  schemaPath?: string,
+): { validation: ActivityValidation; warnings: string[] } | null {
+  const paramDefs = getParameterDefs(pipelineNode);
+  const destQueryParam = paramDefs.find((p) => p.name === "dest_query");
+  const destQueryDefault = asString(destQueryParam?.defaultValue);
+  if (!destQueryDefault || destQueryDefault.startsWith("@")) return null;
+
+  const entityParam = paramDefs.find((p) => p.name === "dataverse_entity_name");
+  const entityDefault = asString(entityParam?.defaultValue);
+  if (!entityDefault || entityDefault.startsWith("@")) return null;
+
+  const warnings: string[] = [];
+  const parseResult = extractDestQueryAliases(destQueryDefault);
+  warnings.push(...parseResult.warnings);
+
+  const entityAttrs = getEntityAttributes(graph, entityDefault, schemaPath);
+  const entityFound = entityAttrs !== null;
+
+  const columns: ColumnValidation[] = parseResult.aliases.map((a) => {
+    const aliasLower = a.alias.toLowerCase();
+    if (SYSTEM_ATTRIBUTES.has(aliasLower)) {
+      return { alias: a.alias, status: "system" as const };
+    }
+    if (!entityFound) {
+      return { alias: a.alias, status: "valid" as const };
+    }
+    return {
+      alias: a.alias,
+      status: entityAttrs!.has(aliasLower) ? "valid" as const : "invalid" as const,
+    };
+  });
+
+  return {
+    validation: {
+      activityId: pipelineNode.id,
+      activityName: `${pipelineNode.name} (parameter default)`,
+      entityName: entityDefault,
+      entityFound,
+      columns,
+      destQuery: destQueryDefault,
+    },
+    warnings,
+  };
+}
+
 export function handleValidatePipeline(
   graph: Graph,
   pipeline: string,
@@ -151,6 +201,12 @@ export function handleValidatePipeline(
 
     activities.push(result.validation);
     warnings.push(...result.warnings);
+  }
+
+  const defaultResult = validatePipelineDefaults(graph, lookup.node!, schemaPath);
+  if (defaultResult) {
+    activities.push(defaultResult.validation);
+    warnings.push(...defaultResult.warnings);
   }
 
   const totalColumns = activities.reduce((sum, a) => sum + a.columns.length, 0);

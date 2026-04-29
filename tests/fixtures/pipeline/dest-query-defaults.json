@@ -1,0 +1,40 @@
+{
+  "name": "Dest_Query_Defaults_Test",
+  "properties": {
+    "parameters": {
+      "dest_query": {
+        "type": "String",
+        "defaultValue": "SELECT org_id AS alm_orgid, org_name AS alm_name, bad_col AS nonexistent_attr, CASE WHEN status = 'Active' THEN 1 WHEN status = 'Closed' THEN 999 ELSE 2 END AS statuscode FROM dbo.Org_Staging"
+      },
+      "dataverse_entity_name": {
+        "type": "String",
+        "defaultValue": "alm_organization"
+      }
+    },
+    "activities": [
+      {
+        "name": "Run Partition Loop",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Dataverse",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "dest_query": {
+              "value": "@pipeline().parameters.dest_query",
+              "type": "Expression"
+            },
+            "dataverse_entity_name": {
+              "value": "@pipeline().parameters.dataverse_entity_name",
+              "type": "Expression"
+            }
+          }
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

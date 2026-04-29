@@ -6,6 +6,8 @@ import {
   extractCaseValues,
   extractCaseElseValue,
 } from "../parsers/destQueryParser.js";
+import { getParameterDefs } from "../graph/nodeMetadata.js";
+import { asString } from "../utils/expressionValue.js";
 
 const STATUS_ALIASES = new Set(["statuscode", "statecode"]);
 
@@ -60,8 +62,8 @@ export function handleValidateStatuscode(
     const params = actNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
     if (!params) continue;
 
-    const destQuery = params.dest_query;
-    if (typeof destQuery !== "string" || destQuery.startsWith("@")) continue;
+    const destQuery = asString(params.dest_query);
+    if (!destQuery || destQuery.startsWith("@")) continue;
 
     const entityName = resolveEntityName(graph, actNode);
     if (!entityName) {
@@ -116,6 +118,65 @@ export function handleValidateStatuscode(
         invalidValues,
         optionSetAvailable,
       });
+    }
+  }
+
+  // Check pipeline-level parameter defaults for dest_query statuscode
+  const paramDefs = getParameterDefs(lookup.node!);
+  const destQueryParam = paramDefs.find((p) => p.name === "dest_query");
+  const destQueryDefault = asString(destQueryParam?.defaultValue);
+  if (destQueryDefault && !destQueryDefault.startsWith("@")) {
+    const entityParam = paramDefs.find((p) => p.name === "dataverse_entity_name");
+    const entityDefault = asString(entityParam?.defaultValue);
+    if (entityDefault && !entityDefault.startsWith("@")) {
+      const parseResult = extractDestQueryAliases(destQueryDefault);
+      warnings.push(...parseResult.warnings);
+
+      for (const alias of parseResult.aliases) {
+        if (!STATUS_ALIASES.has(alias.alias.toLowerCase())) continue;
+        if (!alias.isCaseExpression) continue;
+
+        const caseValues = extractCaseValues(alias.expression);
+        const elseValue = extractCaseElseValue(alias.expression);
+        const mappedValues = caseValues.map((v) => v.thenValue);
+        if (elseValue !== undefined) mappedValues.push(elseValue);
+
+        let validOptionSetValues: OptionSetValue[] = [];
+        let optionSetAvailable = false;
+
+        if (schemaPath) {
+          const entityNodeId = `${NodeType.DataverseEntity}:${entityDefault}`;
+          const entityNode = graph.getNode(entityNodeId);
+          if (entityNode?.metadata.schemaFile) {
+            const detail = loadEntityDetail(schemaPath, entityNode.metadata.schemaFile as string);
+            if (detail) {
+              const attr = detail.attributes.find(
+                (a) => a.logicalName === alias.alias.toLowerCase()
+              );
+              if (attr?.optionSet) {
+                optionSetAvailable = true;
+                validOptionSetValues = attr.optionSet;
+              }
+            }
+          }
+        }
+
+        const validSet = new Set(validOptionSetValues.map((v) => v.value));
+        const invalidValues = optionSetAvailable
+          ? mappedValues.filter((v) => !validSet.has(v))
+          : [];
+
+        validations.push({
+          activityId: lookup.id,
+          activityName: `${pipeline} (parameter default)`,
+          entityName: entityDefault,
+          alias: alias.alias,
+          mappedValues,
+          validValues: validOptionSetValues,
+          invalidValues,
+          optionSetAvailable,
+        });
+      }
     }
   }
 

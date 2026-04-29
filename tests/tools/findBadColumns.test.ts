@@ -24,6 +24,28 @@ describe("handleFindBadColumns", () => {
     expect(destQueryEntry!.entity).toBe("alm_organization");
   });
 
+  it("finds bad columns in Expression-wrapped dest_query", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleFindBadColumns(graph, schemaPath);
+
+    const exprEntry = result.entries.find(
+      (e) => e.pipeline === "Dest_Query_Test" && e.activity === "Load Expression Wrapped"
+    );
+    expect(exprEntry).toBeDefined();
+    expect(exprEntry!.badColumns).toContain("nonexistent_attr");
+  });
+
+  it("finds bad columns in pipeline-level parameter defaults", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleFindBadColumns(graph, schemaPath);
+
+    const defaultEntry = result.entries.find(
+      (e) => e.pipeline === "Dest_Query_Defaults_Test" && e.activity.includes("parameter default")
+    );
+    expect(defaultEntry).toBeDefined();
+    expect(defaultEntry!.badColumns).toContain("nonexistent_attr");
+  });
+
   it("does not flag system attributes as bad", () => {
     const { graph } = buildGraph(fixtureRoot, schemaPath);
     const result = handleFindBadColumns(graph, schemaPath);
