@@ -1,0 +1,44 @@
+{
+  "name": "Copy_DV_IgnoreNulls",
+  "properties": {
+    "activities": [
+      {
+        "name": "Safe Upsert Contacts",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "SELECT contact_id, full_name FROM dbo.Contact_Staging"
+          },
+          "sink": {
+            "type": "CommonDataServiceForAppsSink",
+            "writeBehavior": "upsert",
+            "ignoreNullValues": true,
+            "alternateKeyName": "contact_key"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_sql_staging",
+            "type": "DatasetReference",
+            "parameters": {
+              "schema_name": "dbo",
+              "table_name": "Contact_Staging"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_dataverse",
+            "type": "DatasetReference",
+            "parameters": {
+              "entity_name": "contact"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": []
+  }
+}

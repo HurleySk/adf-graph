@@ -96,6 +96,15 @@ export function getEntityAttributes(
   return attrs;
 }
 
+export function getWrittenEntity(graph: Graph, activityId: string): string | null {
+  for (const edge of graph.getOutgoing(activityId)) {
+    if (edge.type === EdgeType.WritesTo && edge.to.startsWith(`${NodeType.DataverseEntity}:`)) {
+      return edge.to.replace(`${NodeType.DataverseEntity}:`, "");
+    }
+  }
+  return null;
+}
+
 export interface DestQueryDefaults {
   destQuery: string;
   entityName: string;

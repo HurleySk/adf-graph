@@ -5,3 +5,4 @@ dist/
 adf-graph.json
 tests/.tmp-config/
 .worktrees/
+tests/integration.test.ts

@@ -4,6 +4,7 @@ import { parseExecutePipeline } from "./executePipeline.js";
 import { parseCopyActivity } from "./copy.js";
 import { parseStoredProcedureActivity } from "./storedProcedure.js";
 import { parseContainerActivity, isContainerType } from "./container.js";
+import { asString } from "../../utils/expressionValue.js";
 
 export { ActivityContext } from "./base.js";
 export { processDatasetParams } from "./copy.js";
@@ -16,11 +17,6 @@ export interface ActivityDispatchResult {
   warnings: string[];
 }
 
-/**
- * Parse a single activity: creates the base node + standard edges, then
- * dispatches to the type-specific handler (ExecutePipeline, Copy, or
- * SqlServerStoredProcedure).
- */
 export function parseActivity(
   activity: Record<string, unknown>,
   context: ActivityContext,
@@ -50,6 +46,13 @@ export function parseActivity(
     innerNodes = result.innerNodes;
     edges.push(...result.edges);
     warnings.push(...result.warnings);
+  }
+
+  if (!node.metadata.sqlQuery) {
+    const tp = activity.typeProperties as Record<string, unknown> | undefined;
+    const src = tp?.source as Record<string, unknown> | undefined;
+    const sql = asString(src?.sqlReaderQuery);
+    if (sql) node.metadata.sqlQuery = sql;
   }
 
   return { node, innerNodes, edges, warnings };

@@ -18,6 +18,11 @@ export interface ActivityMetadata {
   storedProcedureParameters?: Record<string, unknown>;
   pipelineParameters?: Record<string, unknown>;
   executedPipeline?: string;
+  sourceType?: string;
+  sinkType?: string;
+  sinkWriteBehavior?: string;
+  sinkIgnoreNullValues?: boolean;
+  sinkAlternateKeyName?: string;
 }
 
 export function getParameterDefs(node: GraphNode): ParameterDef[] {
@@ -40,6 +45,11 @@ export function getActivityMetadata(node: GraphNode): ActivityMetadata {
     storedProcedureParameters: m.storedProcedureParameters as Record<string, unknown> | undefined,
     pipelineParameters: m.pipelineParameters as Record<string, unknown> | undefined,
     executedPipeline: m.executedPipeline as string | undefined,
+    sourceType: m.sourceType as string | undefined,
+    sinkType: m.sinkType as string | undefined,
+    sinkWriteBehavior: m.sinkWriteBehavior as string | undefined,
+    sinkIgnoreNullValues: m.sinkIgnoreNullValues as boolean | undefined,
+    sinkAlternateKeyName: m.sinkAlternateKeyName as string | undefined,
   };
 }
 

@@ -2,10 +2,6 @@ import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { extractTablesFromSql } from "../parseResult.js";
 import { asString } from "../../utils/expressionValue.js";
 
-/**
- * Process dataset parameters to create reads_from/writes_to edges for
- * entity_name (Dataverse) and table_name (SQL table) references.
- */
 export function processDatasetParams(
   activityId: string,
   params: Record<string, unknown>,
@@ -37,13 +33,6 @@ export function processDatasetParams(
   }
 }
 
-/**
- * Handle Copy activity-specific logic:
- *   - Input/output dataset references (uses_dataset edges)
- *   - Dataset parameter extraction (reads_from/writes_to for tables and DV entities)
- *   - SQL reader query extraction (reads_from table edges + sqlQuery metadata)
- *   - FetchXML query extraction (fetchXmlQuery metadata)
- */
 export function parseCopyActivity(
   activity: Record<string, unknown>,
   activityNode: GraphNode,
@@ -56,7 +45,6 @@ export function parseCopyActivity(
   const inputs = (activity.inputs as unknown[]) ?? [];
   const outputs = (activity.outputs as unknown[]) ?? [];
 
-  // inputs -> uses_dataset (reads)
   for (const inp of inputs) {
     const i = inp as Record<string, unknown>;
     const refName = asString(i.referenceName);
@@ -74,7 +62,6 @@ export function parseCopyActivity(
     }
   }
 
-  // outputs -> uses_dataset (writes)
   for (const out of outputs) {
     const o = out as Record<string, unknown>;
     const refName = asString(o.referenceName);
@@ -92,7 +79,6 @@ export function parseCopyActivity(
     }
   }
 
-  // SQL reader query -> reads_from table
   const source = typeProperties?.source as Record<string, unknown> | undefined;
   const sqlText = asString(source?.sqlReaderQuery) ?? null;
   if (sqlText) {
@@ -111,6 +97,18 @@ export function parseCopyActivity(
   const fetchXml = source?.query;
   if (typeof fetchXml === "string" && fetchXml.trim().startsWith("<")) {
     activityNode.metadata.fetchXmlQuery = fetchXml;
+  }
+
+  if (source) {
+    activityNode.metadata.sourceType = source.type as string | undefined;
+  }
+
+  const sink = typeProperties?.sink as Record<string, unknown> | undefined;
+  if (sink) {
+    activityNode.metadata.sinkType = sink.type as string | undefined;
+    activityNode.metadata.sinkWriteBehavior = sink.writeBehavior as string | undefined;
+    activityNode.metadata.sinkIgnoreNullValues = sink.ignoreNullValues as boolean | undefined;
+    activityNode.metadata.sinkAlternateKeyName = sink.alternateKeyName as string | undefined;
   }
 
   return { edges, warnings };

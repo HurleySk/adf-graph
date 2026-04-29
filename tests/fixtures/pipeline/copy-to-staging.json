@@ -3,9 +3,24 @@
   "properties": {
     "activities": [
       {
+        "name": "Truncate Staging",
+        "type": "Lookup",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "TRUNCATE TABLE dbo.Org_Staging; SELECT 1 AS done"
+          },
+          "dataset": {
+            "referenceName": "ds_sql_staging",
+            "type": "DatasetReference"
+          }
+        }
+      },
+      {
         "name": "Copy Legacy Data",
         "type": "Copy",
-        "dependsOn": [],
+        "dependsOn": [{ "activity": "Truncate Staging", "dependencyConditions": ["Succeeded"] }],
         "typeProperties": {
           "source": {
             "type": "SqlServerSource",
