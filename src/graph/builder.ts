@@ -2,7 +2,7 @@ import { readdirSync, statSync, existsSync, readFileSync } from "fs";
 import { join, extname, basename } from "path";
 import { Graph, GraphNode, GraphEdge, NodeType, EdgeType } from "./model.js";
 import { ADF_DIRS } from "../constants.js";
-import { inferNodeType, parseNodeId } from "../utils/nodeId.js";
+import { inferNodeType, parseNodeId, makeNodeId, makeActivityId } from "../utils/nodeId.js";
 import { ParseResult, parsePipelineFile } from "../parsers/pipeline.js";
 import { extractColumnMappings } from "../parsers/columns.js";
 import { CONTAINER_TYPES } from "../parsers/activities/container.js";
@@ -88,7 +88,7 @@ function extractColumnMappingsRecursive(
     const fullPrefix = `${prefix}${activityName}`;
 
     if (activityType === "Copy") {
-      const activityId = `activity:${pipelineName}/${fullPrefix}`;
+      const activityId = makeActivityId(pipelineName, prefix, activityName);
       const colEdges = extractColumnMappings(activityId, activity);
       for (const edge of colEdges) {
         graph.addEdge(edge);
@@ -192,7 +192,7 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
 
     // Add reads_from edges: SP → source table
     for (const sourceTable of parseResult.readTables) {
-      const tableNodeId = `${NodeType.Table}:${sourceTable}`;
+      const tableNodeId = makeNodeId(NodeType.Table, sourceTable);
       const edge: GraphEdge = {
         from: spNode.id,
         to: tableNodeId,
@@ -204,7 +204,7 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
 
     // Add writes_to edges: SP → target table
     for (const targetTable of parseResult.writeTables) {
-      const tableNodeId = `${NodeType.Table}:${targetTable}`;
+      const tableNodeId = makeNodeId(NodeType.Table, targetTable);
       const edge: GraphEdge = {
         from: spNode.id,
         to: tableNodeId,

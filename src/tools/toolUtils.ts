@@ -1,6 +1,6 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
-import { makeNodeId } from "../utils/nodeId.js";
-import { asString } from "../utils/expressionValue.js";
+import { makeNodeId, makeEntityId, makePipelineId } from "../utils/nodeId.js";
+import { asNonDynamic } from "../utils/expressionValue.js";
 import { loadEntityDetail } from "../parsers/dataverseSchema.js";
 import { getParameterDefs } from "../graph/nodeMetadata.js";
 
@@ -19,7 +19,7 @@ export interface PipelineLookupFailure {
 export type PipelineLookupResult = PipelineLookupSuccess | PipelineLookupFailure;
 
 export function lookupPipelineNode(graph: Graph, pipeline: string): PipelineLookupResult {
-  const id = makeNodeId(NodeType.Pipeline, pipeline);
+  const id = makePipelineId(pipeline);
   const node = graph.getNode(id);
   if (!node) {
     return { node: undefined, id, error: `Pipeline '${pipeline}' not found` };
@@ -33,8 +33,8 @@ export function resolveEntityName(
 ): string | null {
   const params = activityNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
   if (params) {
-    const entityName = asString(params.dataverse_entity_name);
-    if (entityName && !entityName.startsWith("@")) {
+    const entityName = asNonDynamic(params.dataverse_entity_name);
+    if (entityName) {
       return entityName;
     }
   }
@@ -68,7 +68,7 @@ export function getEntityAttributes(
   entityName: string,
   schemaPath?: string,
 ): Set<string> | null {
-  const entityNodeId = `${NodeType.DataverseEntity}:${entityName}`;
+  const entityNodeId = makeEntityId(entityName);
   const entityNode = graph.getNode(entityNodeId);
   if (!entityNode) return null;
 
@@ -98,7 +98,7 @@ export function getEntityAttributes(
 
 export function getWrittenEntity(graph: Graph, activityId: string): string | null {
   for (const edge of graph.getOutgoing(activityId)) {
-    if (edge.type === EdgeType.WritesTo && edge.to.startsWith(`${NodeType.DataverseEntity}:`)) {
+    if (edge.type === EdgeType.WritesTo && edge.to.startsWith("dataverse_entity:")) {
       return edge.to.replace(`${NodeType.DataverseEntity}:`, "");
     }
   }
@@ -117,12 +117,12 @@ export function resolveDestQueryDefaults(
 ): DestQueryDefaults | null {
   const paramDefs = getParameterDefs(pipelineNode);
   const destQueryParam = paramDefs.find((p) => p.name === "dest_query");
-  const destQueryDefault = asString(destQueryParam?.defaultValue);
-  if (!destQueryDefault || destQueryDefault.startsWith("@")) return null;
+  const destQueryDefault = asNonDynamic(destQueryParam?.defaultValue);
+  if (!destQueryDefault) return null;
 
   const entityParam = paramDefs.find((p) => p.name === "dataverse_entity_name");
-  const entityDefault = asString(entityParam?.defaultValue);
-  if (!entityDefault || entityDefault.startsWith("@")) return null;
+  const entityDefault = asNonDynamic(entityParam?.defaultValue);
+  if (!entityDefault) return null;
 
   return {
     destQuery: destQueryDefault,

@@ -6,3 +6,8 @@ export function asString(val: unknown): string | undefined {
   }
   return undefined;
 }
+
+export function asNonDynamic(val: unknown): string | undefined {
+  const s = asString(val);
+  return s && !s.startsWith("@") ? s : undefined;
+}

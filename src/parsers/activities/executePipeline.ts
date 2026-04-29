@@ -1,7 +1,8 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { ActivityContext } from "./base.js";
 import { extractTablesFromSql } from "../parseResult.js";
-import { asString } from "../../utils/expressionValue.js";
+import { asString, asNonDynamic } from "../../utils/expressionValue.js";
+import { makePipelineId, makeNodeId, makeEntityId } from "../../utils/nodeId.js";
 
 /**
  * Handle ExecutePipeline-specific logic:
@@ -28,7 +29,7 @@ export function parseExecutePipeline(
     } else {
       edges.push({
         from: context.pipelineId,
-        to: `${NodeType.Pipeline}:${refName}`,
+        to: makePipelineId(refName),
         type: EdgeType.Executes,
         metadata: {},
       });
@@ -46,7 +47,7 @@ export function parseExecutePipeline(
     if (sqlText) {
       const tables = extractTablesFromSql(sqlText);
       for (const tbl of tables) {
-        const target = `${NodeType.Table}:${tbl}`;
+        const target = makeNodeId(NodeType.Table, tbl);
         seenSourceTables.add(target);
         edges.push({
           from: activityNode.id,
@@ -58,12 +59,11 @@ export function parseExecutePipeline(
     }
 
     // Extract source table from source_object_name parameter (skip if already covered by source_query)
-    const sourceObjName = asString(execParams.source_object_name);
-    if (sourceObjName && sourceObjName.length > 0 && !sourceObjName.startsWith("@")) {
-      const srcSchema = asString(execParams.source_schema_name);
-      const schema = srcSchema && !srcSchema.startsWith("@") ? srcSchema : "dbo";
+    const sourceObjName = asNonDynamic(execParams.source_object_name);
+    if (sourceObjName) {
+      const schema = asNonDynamic(execParams.source_schema_name) ?? "dbo";
       const tableName = sourceObjName.includes(".") ? sourceObjName : `${schema}.${sourceObjName}`;
-      const target = `${NodeType.Table}:${tableName}`;
+      const target = makeNodeId(NodeType.Table, tableName);
       if (!seenSourceTables.has(target)) {
         edges.push({
           from: activityNode.id,
@@ -75,25 +75,24 @@ export function parseExecutePipeline(
     }
 
     // Extract destination table from dest_object_name parameter
-    const destObjName = asString(execParams.dest_object_name);
-    if (destObjName && destObjName.length > 0 && !destObjName.startsWith("@")) {
-      const destSchema = asString(execParams.dest_schema_name);
-      const schema = destSchema && !destSchema.startsWith("@") ? destSchema : "dbo";
+    const destObjName = asNonDynamic(execParams.dest_object_name);
+    if (destObjName) {
+      const schema = asNonDynamic(execParams.dest_schema_name) ?? "dbo";
       const tableName = destObjName.includes(".") ? destObjName : `${schema}.${destObjName}`;
       edges.push({
         from: activityNode.id,
-        to: `${NodeType.Table}:${tableName}`,
+        to: makeNodeId(NodeType.Table, tableName),
         type: EdgeType.WritesTo,
         metadata: {},
       });
     }
 
     // Extract Dataverse entity from dataverse_entity_name parameter
-    const dvEntityName = asString(execParams.dataverse_entity_name);
-    if (dvEntityName && dvEntityName.length > 0 && !dvEntityName.startsWith("@")) {
+    const dvEntityName = asNonDynamic(execParams.dataverse_entity_name);
+    if (dvEntityName) {
       edges.push({
         from: activityNode.id,
-        to: `${NodeType.DataverseEntity}:${dvEntityName}`,
+        to: makeEntityId(dvEntityName),
         type: EdgeType.WritesTo,
         metadata: {},
       });

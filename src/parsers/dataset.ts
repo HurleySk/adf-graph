@@ -1,5 +1,6 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../graph/model.js";
 import { ParseResult } from "./parseResult.js";
+import { makeDatasetId, makeLinkedServiceId, makeTableId } from "../utils/nodeId.js";
 
 export { ParseResult };
 
@@ -21,7 +22,7 @@ export function parseDatasetFile(json: unknown): ParseResult {
   const parameters = (properties?.parameters as Record<string, unknown>) ?? {};
   const typeProperties = properties?.typeProperties as Record<string, unknown> | undefined;
 
-  const datasetId = `${NodeType.Dataset}:${datasetName}`;
+  const datasetId = makeDatasetId(datasetName);
 
   nodes.push({
     id: datasetId,
@@ -39,7 +40,7 @@ export function parseDatasetFile(json: unknown): ParseResult {
   if (lsName) {
     edges.push({
       from: datasetId,
-      to: `linked_service:${lsName}`,
+      to: makeLinkedServiceId(lsName),
       type: EdgeType.UsesLinkedService,
       metadata: {},
     });
@@ -58,7 +59,7 @@ export function parseDatasetFile(json: unknown): ParseResult {
     if (schemaStr && tableStr) {
       edges.push({
         from: datasetId,
-        to: `${NodeType.Table}:${schemaStr}.${tableStr}`,
+        to: makeTableId(schemaStr, tableStr),
         type: EdgeType.ReadsFrom,
         metadata: {},
       });

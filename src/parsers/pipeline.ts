@@ -1,6 +1,7 @@
 import { GraphNode, GraphEdge, NodeType } from "../graph/model.js";
 import { ParseResult, extractTablesFromSql } from "./parseResult.js";
 import { parseActivity } from "./activities/index.js";
+import { makePipelineId } from "../utils/nodeId.js";
 
 // Re-export for backward compatibility — other files import these from pipeline.ts
 export { ParseResult, extractTablesFromSql };
@@ -21,7 +22,7 @@ export function parsePipelineFile(json: unknown): ParseResult {
   const activities = (properties?.activities as unknown[]) ?? [];
 
   // Pipeline node
-  const pipelineId = `${NodeType.Pipeline}:${pipelineName}`;
+  const pipelineId = makePipelineId(pipelineName);
   const paramDefs = (properties?.parameters as Record<string, unknown>) ?? {};
   const parameters = Object.entries(paramDefs).map(([name, def]) => {
     const d = def as Record<string, unknown> | null;

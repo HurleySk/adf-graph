@@ -1,5 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { loadEntityDetail } from "../parsers/dataverseSchema.js";
+import { makeEntityId } from "../utils/nodeId.js";
 
 interface AttributeSummary {
   name: string;
@@ -35,7 +36,7 @@ export function handleDescribeEntity(
   depth: "summary" | "full",
   schemaPath?: string,
 ): DescribeEntityResult {
-  const nodeId = `${NodeType.DataverseEntity}:${entity}`;
+  const nodeId = makeEntityId(entity);
   const node = graph.getNode(nodeId);
 
   if (!node) {

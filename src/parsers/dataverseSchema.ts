@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../graph/model.js";
+import { makeEntityId, makeAttributeId } from "../utils/nodeId.js";
 
 export interface SchemaParseResult {
   nodes: GraphNode[];
@@ -87,7 +88,7 @@ export function parseSchemaIndex(schemaPath: string): SchemaParseResult {
     }
 
     entityCount++;
-    const entityId = `${NodeType.DataverseEntity}:${entry.logicalName}`;
+    const entityId = makeEntityId(entry.logicalName);
 
     nodes.push({
       id: entityId,
@@ -111,7 +112,7 @@ export function parseSchemaIndex(schemaPath: string): SchemaParseResult {
       .filter((a) => a.length > 0);
 
     for (const attrName of attributeNames) {
-      const attrId = `${NodeType.DataverseAttribute}:${entry.logicalName}.${attrName}`;
+      const attrId = makeAttributeId(entry.logicalName, attrName);
 
       nodes.push({
         id: attrId,

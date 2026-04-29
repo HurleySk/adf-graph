@@ -2,6 +2,7 @@ import { readdirSync, statSync, existsSync } from "fs";
 import { join, basename, extname } from "path";
 import { GraphNode, GraphEdge, NodeType } from "../graph/model.js";
 import { ParseResult } from "./parseResult.js";
+import { makeSpId, makeTableId } from "../utils/nodeId.js";
 
 export { ParseResult };
 
@@ -82,7 +83,7 @@ export function scanSqlDirectory(sqlRoot: string): ParseResult {
   const spFiles = collectFromNamedDirs(sqlRoot, "Stored Procedures");
   for (const { schema, filePath } of spFiles) {
     const name = basename(filePath, extname(filePath));
-    const id = `${NodeType.StoredProcedure}:${schema}.${name}`;
+    const id = makeSpId(schema, name);
     nodes.push({
       id,
       type: NodeType.StoredProcedure,
@@ -95,7 +96,7 @@ export function scanSqlDirectory(sqlRoot: string): ParseResult {
   const tableFiles = collectFromNamedDirs(sqlRoot, "Tables");
   for (const { schema, filePath } of tableFiles) {
     const name = basename(filePath, extname(filePath));
-    const id = `${NodeType.Table}:${schema}.${name}`;
+    const id = makeTableId(schema, name);
     nodes.push({
       id,
       type: NodeType.Table,

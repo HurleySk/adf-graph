@@ -1,5 +1,6 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { asString } from "../../utils/expressionValue.js";
+import { makeActivityId, makeLinkedServiceId } from "../../utils/nodeId.js";
 
 export interface ActivityContext {
   pipelineId: string;
@@ -26,7 +27,7 @@ export function parseBaseActivity(
   const activityName = activity.name as string;
   const activityType = activity.type as string;
   const prefix = context.containerPrefix ?? "";
-  const activityId = `${NodeType.Activity}:${context.pipelineName}/${prefix}${activityName}`;
+  const activityId = makeActivityId(context.pipelineName, prefix, activityName);
 
   const node: GraphNode = {
     id: activityId,
@@ -50,7 +51,7 @@ export function parseBaseActivity(
   for (const dep of dependsOn) {
     const d = dep as Record<string, unknown>;
     const depName = d.activity as string;
-    const depId = `${NodeType.Activity}:${context.pipelineName}/${prefix}${depName}`;
+    const depId = makeActivityId(context.pipelineName, prefix, depName);
     edges.push({
       from: activityId,
       to: depId,
@@ -64,7 +65,7 @@ export function parseBaseActivity(
   if (lsName) {
     edges.push({
       from: activityId,
-      to: `${NodeType.LinkedService}:${lsName}`,
+      to: makeLinkedServiceId(lsName),
       type: EdgeType.UsesLinkedService,
       metadata: {},
     });

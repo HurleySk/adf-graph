@@ -1,6 +1,7 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { extractTablesFromSql } from "../parseResult.js";
-import { asString } from "../../utils/expressionValue.js";
+import { asString, asNonDynamic } from "../../utils/expressionValue.js";
+import { makeEntityId, makeTableId, makeDatasetId, makeNodeId } from "../../utils/nodeId.js";
 
 export function processDatasetParams(
   activityId: string,
@@ -10,23 +11,22 @@ export function processDatasetParams(
 ): void {
   const edgeType = direction === "reads_from" ? EdgeType.ReadsFrom : EdgeType.WritesTo;
 
-  const entityName = asString(params.entity_name);
-  if (entityName && !entityName.startsWith("@")) {
+  const entityName = asNonDynamic(params.entity_name);
+  if (entityName) {
     edges.push({
       from: activityId,
-      to: `${NodeType.DataverseEntity}:${entityName}`,
+      to: makeEntityId(entityName),
       type: edgeType,
       metadata: {},
     });
   }
 
-  const tableName = asString(params.table_name);
-  const schemaName = asString(params.schema_name);
-  if (tableName && !tableName.startsWith("@")) {
-    const schema = schemaName && !schemaName.startsWith("@") ? schemaName : "dbo";
+  const tableName = asNonDynamic(params.table_name);
+  if (tableName) {
+    const schema = asNonDynamic(params.schema_name) ?? "dbo";
     edges.push({
       from: activityId,
-      to: `${NodeType.Table}:${schema}.${tableName}`,
+      to: makeTableId(schema, tableName),
       type: edgeType,
       metadata: {},
     });
@@ -51,7 +51,7 @@ export function parseCopyActivity(
     if (!refName) continue;
     edges.push({
       from: activityId,
-      to: `${NodeType.Dataset}:${refName}`,
+      to: makeDatasetId(refName),
       type: EdgeType.UsesDataset,
       metadata: {},
     });
@@ -68,7 +68,7 @@ export function parseCopyActivity(
     if (!refName) continue;
     edges.push({
       from: activityId,
-      to: `${NodeType.Dataset}:${refName}`,
+      to: makeDatasetId(refName),
       type: EdgeType.UsesDataset,
       metadata: {},
     });
@@ -86,7 +86,7 @@ export function parseCopyActivity(
     for (const tbl of tables) {
       edges.push({
         from: activityId,
-        to: `${NodeType.Table}:${tbl}`,
+        to: makeNodeId(NodeType.Table, tbl),
         type: EdgeType.ReadsFrom,
         metadata: {},
       });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { asString } from "../../src/utils/expressionValue.js";
+import { asString, asNonDynamic } from "../../src/utils/expressionValue.js";
 
 describe("asString", () => {
   it("returns a plain string as-is", () => {
@@ -28,5 +28,32 @@ describe("asString", () => {
 
   it("returns undefined when Expression value is not a string", () => {
     expect(asString({ value: 123, type: "Expression" })).toBeUndefined();
+  });
+});
+
+describe("asNonDynamic", () => {
+  it("returns string for plain value", () => {
+    expect(asNonDynamic("hello")).toBe("hello");
+  });
+
+  it("returns undefined for @-expression", () => {
+    expect(asNonDynamic("@pipeline().parameters.x")).toBeUndefined();
+  });
+
+  it("unwraps Expression object with non-dynamic value", () => {
+    expect(asNonDynamic({ value: "SELECT 1", type: "Expression" })).toBe("SELECT 1");
+  });
+
+  it("returns undefined for Expression object with @-value", () => {
+    expect(asNonDynamic({ value: "@pipeline().parameters.x", type: "Expression" })).toBeUndefined();
+  });
+
+  it("returns undefined for null/undefined", () => {
+    expect(asNonDynamic(null)).toBeUndefined();
+    expect(asNonDynamic(undefined)).toBeUndefined();
+  });
+
+  it("returns undefined for empty string", () => {
+    expect(asNonDynamic("")).toBeUndefined();
   });
 });

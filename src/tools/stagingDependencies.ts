@@ -1,6 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
-import { parseActivityId, parseNodeId } from "../utils/nodeId.js";
+import { parseActivityId, parseNodeId, makePipelineId } from "../utils/nodeId.js";
 
 export interface TablePipelineUsage {
   pipeline: string;
@@ -74,7 +74,7 @@ export function handleStagingDependencies(
         const { pipeline, activity } = parseActivityId(edge.from);
 
         if (edge.type === EdgeType.WritesTo) {
-          const pipelineId = `${NodeType.Pipeline}:${pipeline}`;
+          const pipelineId = makePipelineId(pipeline);
           const hasTruncate =
             activityHasTruncateFor(graph, edge.from, tableName) ||
             pipelineHasTruncateFor(graph, pipelineId, tableName);

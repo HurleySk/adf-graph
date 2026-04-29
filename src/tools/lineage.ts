@@ -1,4 +1,5 @@
 import { Graph, EdgeType, GraphEdge, NodeType } from "../graph/model.js";
+import { makeEntityId, makeNodeId, makeAttributeId } from "../utils/nodeId.js";
 
 export type LineageDirection = "upstream" | "downstream";
 
@@ -23,6 +24,16 @@ export interface ColumnMapping {
 }
 
 export type LineageDetail = "summary" | "full";
+
+export interface LineageOptions {
+  attribute?: string;
+  direction?: LineageDirection;
+  maxDepth?: number;
+  detail?: LineageDetail;
+  nodeTypes?: string[];
+  limit?: number;
+  offset?: number;
+}
 
 export interface LineageNodeGroup {
   type: string;
@@ -86,22 +97,25 @@ function pathToSteps(graph: Graph, path: GraphEdge[], direction: LineageDirectio
 export function handleDataLineage(
   graph: Graph,
   entity: string,
-  attribute?: string,
-  direction: LineageDirection = "upstream",
-  maxDepth?: number,
-  detail: LineageDetail = "summary",
-  nodeTypes?: string[],
-  limit?: number,
-  offset?: number,
+  options?: LineageOptions,
 ): DataLineageResult | DataLineageSummaryResult {
+  const {
+    attribute,
+    direction = "upstream",
+    maxDepth,
+    detail = "summary",
+    nodeTypes,
+    limit,
+    offset,
+  } = options ?? {};
   // Resolve node ID: try dataverse_entity first, then table (exact), then dbo-prefixed, then scan
-  let nodeId = `dataverse_entity:${entity}`;
+  let nodeId = makeEntityId(entity);
   if (!graph.getNode(nodeId)) {
-    nodeId = `table:${entity}`;
+    nodeId = makeNodeId(NodeType.Table, entity);
   }
   if (!graph.getNode(nodeId)) {
     // Try with dbo schema prefix (most common)
-    nodeId = `table:dbo.${entity}`;
+    nodeId = makeNodeId(NodeType.Table, `dbo.${entity}`);
   }
   if (!graph.getNode(nodeId)) {
     // Scan all table nodes for a case-insensitive name match (handles any schema)
@@ -347,7 +361,7 @@ export function handleDataLineage(
       ? nodeId.slice(`${NodeType.DataverseEntity}:`.length)
       : null;
     if (entityName !== null) {
-      const attrNodeId = `${NodeType.DataverseAttribute}:${entityName}.${attribute}`;
+      const attrNodeId = makeAttributeId(entityName, attribute);
       if (graph.getNode(attrNodeId)) {
         // Attribute exists in graph — scan all activity nodes for matching MapsColumn edges
         const activityNodes = graph.getNodesByType(NodeType.Activity);

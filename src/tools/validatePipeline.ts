@@ -1,7 +1,7 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode, resolveEntityName, getEntityAttributes, resolveDestQueryDefaults } from "./toolUtils.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
-import { asString } from "../utils/expressionValue.js";
+import { asNonDynamic } from "../utils/expressionValue.js";
 
 const SYSTEM_ATTRIBUTES = new Set([
   "statecode", "statuscode", "ownerid", "modifiedby", "createdby",
@@ -63,9 +63,8 @@ export function validateDestQueryActivity(
   const params = activityNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
   if (!params) return null;
 
-  const destQuery = asString(params.dest_query);
+  const destQuery = asNonDynamic(params.dest_query);
   if (!destQuery) return null;
-  if (destQuery.startsWith("@")) return null;
 
   const entityName = resolveEntityName(graph, activityNode);
   if (!entityName) return null;

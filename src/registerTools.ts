@@ -135,7 +135,7 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ entity, attribute, direction, maxDepth, detail, nodeTypes, limit, offset, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleDataLineage(build.graph, entity, attribute, direction, maxDepth, detail, nodeTypes, limit, offset));
+      return json(handleDataLineage(build.graph, entity, { attribute, direction, maxDepth, detail, nodeTypes, limit, offset }));
     },
   );
 

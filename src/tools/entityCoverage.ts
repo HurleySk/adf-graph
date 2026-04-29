@@ -2,7 +2,7 @@ import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseActivityId } from "../utils/nodeId.js";
 import { makeNodeId } from "../utils/nodeId.js";
-import { asString } from "../utils/expressionValue.js";
+import { asNonDynamic } from "../utils/expressionValue.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
 import { resolveDestQueryDefaults } from "./toolUtils.js";
 
@@ -86,9 +86,9 @@ export function handleEntityCoverage(
     const meta = getActivityMetadata(fromNode);
 
     const params = meta.pipelineParameters as Record<string, unknown> | undefined;
-    const destQuery = params ? asString(params.dest_query) : undefined;
+    const destQuery = params ? asNonDynamic(params.dest_query) : undefined;
 
-    if (destQuery && !destQuery.startsWith("@")) {
+    if (destQuery) {
       const parseResult = extractDestQueryAliases(destQuery);
       warnings.push(...parseResult.warnings);
       const columns = parseResult.aliases.map((a) => a.alias);
@@ -126,11 +126,11 @@ export function handleEntityCoverage(
     const params = meta.pipelineParameters as Record<string, unknown> | undefined;
     if (!params) continue;
 
-    const entityParam = asString(params.dataverse_entity_name);
-    if (!entityParam || entityParam.startsWith("@") || entityParam !== entity) continue;
+    const entityParam = asNonDynamic(params.dataverse_entity_name);
+    if (!entityParam || entityParam !== entity) continue;
 
-    const destQuery = asString(params.dest_query);
-    if (!destQuery || destQuery.startsWith("@")) continue;
+    const destQuery = asNonDynamic(params.dest_query);
+    if (!destQuery) continue;
 
     seenActivities.add(actNode.id);
     const { pipeline, activity } = parseActivityId(actNode.id);

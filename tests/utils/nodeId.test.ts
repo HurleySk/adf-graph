@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { makeNodeId, makeActivityId, parseNodeId, parseActivityId, inferNodeType } from "../../src/utils/nodeId.js";
+import {
+  makeNodeId, makeActivityId, parseNodeId, parseActivityId, inferNodeType,
+  makeTableId, makeEntityId, makePipelineId, makeSpId, makeDatasetId,
+  makeLinkedServiceId, makeKeyVaultSecretId, makeAttributeId,
+} from "../../src/utils/nodeId.js";
 import { NodeType } from "../../src/graph/model.js";
 
 describe("makeNodeId", () => {
@@ -9,8 +13,12 @@ describe("makeNodeId", () => {
 });
 
 describe("makeActivityId", () => {
-  it("creates an activity ID from pipeline and activity names", () => {
-    expect(makeActivityId("MyPipeline", "CopyData")).toBe("activity:MyPipeline/CopyData");
+  it("creates an activity ID from pipeline, prefix, and activity names", () => {
+    expect(makeActivityId("MyPipeline", "", "CopyData")).toBe("activity:MyPipeline/CopyData");
+  });
+
+  it("creates an activity ID with a container prefix", () => {
+    expect(makeActivityId("MyPipeline", "Container/", "CopyData")).toBe("activity:MyPipeline/Container/CopyData");
   });
 });
 
@@ -70,5 +78,47 @@ describe("inferNodeType", () => {
 
   it("infers DataverseAttribute from dataverse_attribute prefix", () => {
     expect(inferNodeType("dataverse_attribute:alm_org.alm_name")).toBe(NodeType.DataverseAttribute);
+  });
+});
+
+describe("semantic node ID helpers", () => {
+  it("makeTableId creates table node ID", () => {
+    expect(makeTableId("dbo", "Org_Staging")).toBe("table:dbo.Org_Staging");
+  });
+
+  it("makeEntityId creates entity node ID", () => {
+    expect(makeEntityId("alm_organization")).toBe("dataverse_entity:alm_organization");
+  });
+
+  it("makePipelineId creates pipeline node ID", () => {
+    expect(makePipelineId("Copy_To_Staging")).toBe("pipeline:Copy_To_Staging");
+  });
+
+  it("makeSpId creates stored procedure node ID", () => {
+    expect(makeSpId("dbo", "p_Transform_Org")).toBe("stored_procedure:dbo.p_Transform_Org");
+  });
+
+  it("makeActivityId creates activity node ID with prefix", () => {
+    expect(makeActivityId("MyPipeline", "Container/", "CopyData")).toBe("activity:MyPipeline/Container/CopyData");
+  });
+
+  it("makeActivityId creates activity node ID without prefix", () => {
+    expect(makeActivityId("MyPipeline", "", "CopyData")).toBe("activity:MyPipeline/CopyData");
+  });
+
+  it("makeDatasetId creates dataset node ID", () => {
+    expect(makeDatasetId("DS_Source")).toBe("dataset:DS_Source");
+  });
+
+  it("makeLinkedServiceId creates linked service node ID", () => {
+    expect(makeLinkedServiceId("LS_SqlServer")).toBe("linked_service:LS_SqlServer");
+  });
+
+  it("makeKeyVaultSecretId creates key vault secret node ID", () => {
+    expect(makeKeyVaultSecretId("my-secret")).toBe("key_vault_secret:my-secret");
+  });
+
+  it("makeAttributeId creates attribute node ID", () => {
+    expect(makeAttributeId("alm_organization", "alm_name")).toBe("dataverse_attribute:alm_organization.alm_name");
   });
 });

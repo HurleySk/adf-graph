@@ -1,5 +1,6 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode, resolveEntityName, getEntityAttributes, resolveDestQueryDefaults } from "./toolUtils.js";
+import { makeEntityId } from "../utils/nodeId.js";
 import { loadEntityDetail, type OptionSetValue } from "../parsers/dataverseSchema.js";
 import {
   extractDestQueryAliases,
@@ -7,7 +8,7 @@ import {
   extractCaseElseValue,
   type DestQueryAlias,
 } from "../parsers/destQueryParser.js";
-import { asString } from "../utils/expressionValue.js";
+import { asNonDynamic } from "../utils/expressionValue.js";
 
 const STATUS_ALIASES = new Set(["statuscode", "statecode"]);
 
@@ -57,7 +58,7 @@ function validateStatusAliases(
     let optionSetAvailable = false;
 
     if (schemaPath) {
-      const entityNodeId = `${NodeType.DataverseEntity}:${entityName}`;
+      const entityNodeId = makeEntityId(entityName);
       const entityNode = graph.getNode(entityNodeId);
       if (entityNode?.metadata.schemaFile) {
         const detail = loadEntityDetail(schemaPath, entityNode.metadata.schemaFile as string);
@@ -121,8 +122,8 @@ export function handleValidateStatuscode(
     const params = actNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
     if (!params) continue;
 
-    const destQuery = asString(params.dest_query);
-    if (!destQuery || destQuery.startsWith("@")) continue;
+    const destQuery = asNonDynamic(params.dest_query);
+    if (!destQuery) continue;
 
     const entityName = resolveEntityName(graph, actNode);
     if (!entityName) {

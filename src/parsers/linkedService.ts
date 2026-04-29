@@ -1,6 +1,7 @@
 import { GraphNode, GraphEdge, NodeType, EdgeType } from "../graph/model.js";
 import { ParseResult } from "./parseResult.js";
 import { CONNECTION_PROPERTY_KEYS } from "../utils/connectionProperties.js";
+import { makeLinkedServiceId, makeKeyVaultSecretId } from "../utils/nodeId.js";
 
 export function parseLinkedServiceFile(json: unknown): ParseResult {
   const nodes: GraphNode[] = [];
@@ -23,7 +24,7 @@ export function parseLinkedServiceFile(json: unknown): ParseResult {
 
   const lsType = properties.type as string | undefined;
   const typeProperties = properties.typeProperties as Record<string, unknown> | undefined;
-  const lsId = `${NodeType.LinkedService}:${name}`;
+  const lsId = makeLinkedServiceId(name);
 
   const connectionProperties = typeProperties
     ? extractConnectionProperties(typeProperties)
@@ -86,7 +87,7 @@ function extractKeyVaultRefs(
       const vaultLsName = store?.referenceName as string | undefined;
 
       if (secretName) {
-        const secretId = `${NodeType.KeyVaultSecret}:${secretName}`;
+        const secretId = makeKeyVaultSecretId(secretName);
         nodes.push({
           id: secretId,
           type: NodeType.KeyVaultSecret,
@@ -104,7 +105,7 @@ function extractKeyVaultRefs(
       if (vaultLsName) {
         edges.push({
           from: lsId,
-          to: `${NodeType.LinkedService}:${vaultLsName}`,
+          to: makeLinkedServiceId(vaultLsName),
           type: EdgeType.UsesLinkedService,
           metadata: {},
         });
