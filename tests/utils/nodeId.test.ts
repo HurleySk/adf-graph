@@ -67,4 +67,8 @@ describe("inferNodeType", () => {
   it("returns null for unknown prefix", () => {
     expect(inferNodeType("unknown:something")).toBeNull();
   });
+
+  it("infers DataverseAttribute from dataverse_attribute prefix", () => {
+    expect(inferNodeType("dataverse_attribute:alm_org.alm_name")).toBe(NodeType.DataverseAttribute);
+  });
 });

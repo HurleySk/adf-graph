@@ -31,6 +31,7 @@ export function inferNodeType(id: string): NodeType | null {
     case "stored_procedure": return NodeType.StoredProcedure;
     case "table": return NodeType.Table;
     case "dataverse_entity": return NodeType.DataverseEntity;
+    case "dataverse_attribute": return NodeType.DataverseAttribute;
     case "linked_service": return NodeType.LinkedService;
     case "key_vault_secret": return NodeType.KeyVaultSecret;
     default: return null;
