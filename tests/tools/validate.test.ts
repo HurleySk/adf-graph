@@ -1,10 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { join } from "path";
 import { buildGraph } from "../../src/graph/builder.js";
 import { handleValidate, ValidationIssue } from "../../src/tools/validate.js";
 import { Graph, NodeType, EdgeType } from "../../src/graph/model.js";
+import { clearEntityDetailCache } from "../../src/parsers/dataverseSchema.js";
 
 const fixtureRoot = join(import.meta.dirname, "../fixtures");
+const schemaPath = join(import.meta.dirname, "../fixtures/dataverse-schema/test-env");
 
 describe("handleValidate", () => {
   it("finds broken_dataset_reference errors for stub datasets", () => {
@@ -177,5 +179,40 @@ describe("handleValidate", () => {
     const broken = result.issues.filter((i) => i.category === "broken_sp_reference");
     expect(broken.length).toBe(1);
     expect(broken[0].relatedNodeId).toBe("stored_procedure:dbo.MyProc");
+  });
+});
+
+describe("schema validation rules", () => {
+  beforeEach(() => { clearEntityDetailCache(); });
+
+  it("flags stub dataverse entities as warnings when schema is present", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    graph.addNode({
+      id: "dataverse_entity:fake_entity",
+      type: NodeType.DataverseEntity,
+      name: "fake_entity",
+      metadata: { stub: true },
+    });
+    graph.addEdge({
+      from: "activity:Test/FakeActivity",
+      to: "dataverse_entity:fake_entity",
+      type: EdgeType.WritesTo,
+      metadata: {},
+    });
+    const result = handleValidate(graph, "test", "all", schemaPath);
+    const stubEntities = result.issues.filter((i) => i.category === "stub_dataverse_entity");
+    expect(stubEntities.length).toBeGreaterThanOrEqual(1);
+    expect(stubEntities[0].severity).toBe("warning");
+  });
+
+  it("flags Copy activity mapping to nonexistent attribute", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    graph.addNode({ id: "activity:Test/CopyAct", type: NodeType.Activity, name: "CopyAct", metadata: { activityType: "Copy" } });
+    graph.addEdge({ from: "activity:Test/CopyAct", to: "activity:Test/CopyAct", type: EdgeType.MapsColumn, metadata: { sinkColumn: "nonexistent_attr", sourceColumn: "src_col" } });
+    graph.addEdge({ from: "activity:Test/CopyAct", to: "dataverse_entity:alm_organization", type: EdgeType.WritesTo, metadata: {} });
+    const result = handleValidate(graph, "test", "all", schemaPath);
+    const missingAttr = result.issues.filter((i) => i.category === "missing_dataverse_attribute");
+    expect(missingAttr.length).toBeGreaterThanOrEqual(1);
+    expect(missingAttr[0].severity).toBe("error");
   });
 });

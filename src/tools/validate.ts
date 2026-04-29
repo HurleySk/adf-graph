@@ -19,6 +19,7 @@ export function handleValidate(
   graph: Graph,
   environment: string,
   severity: "all" | "error" | "warning",
+  schemaPath?: string,
 ): GraphValidationResult {
   const issues: ValidationIssue[] = [];
 
@@ -147,6 +148,48 @@ export function handleValidate(
           message: `Node '${node.name}' (${node.type}) has no edges`,
           nodeId: node.id,
         });
+      }
+    }
+  }
+
+  // ── Dataverse schema validation ─────────────────────────────────────────
+  if (schemaPath) {
+    const dvEntities = graph.getNodesByType(NodeType.DataverseEntity);
+    for (const entity of dvEntities) {
+      if (isStub(entity)) {
+        issues.push({
+          severity: "warning",
+          category: "stub_dataverse_entity",
+          message: `Dataverse entity '${entity.name}' is referenced but has no schema definition`,
+          nodeId: entity.id,
+        });
+      }
+    }
+
+    for (const node of graph.allNodes()) {
+      if (node.type !== NodeType.Activity) continue;
+      const outgoing = graph.getOutgoing(node.id);
+      const writesToEntities = outgoing
+        .filter((e) => e.type === EdgeType.WritesTo && e.to.startsWith("dataverse_entity:"))
+        .map((e) => e.to.replace("dataverse_entity:", ""));
+      if (writesToEntities.length === 0) continue;
+
+      const mapColumnEdges = outgoing.filter((e) => e.type === EdgeType.MapsColumn);
+      for (const edge of mapColumnEdges) {
+        const sinkCol = edge.metadata.sinkColumn as string | undefined;
+        if (!sinkCol) continue;
+        for (const entityName of writesToEntities) {
+          const attrNodeId = `dataverse_attribute:${entityName}.${sinkCol}`;
+          if (!graph.getNode(attrNodeId)) {
+            issues.push({
+              severity: "error",
+              category: "missing_dataverse_attribute",
+              message: `Activity '${node.name}' maps to attribute '${sinkCol}' on entity '${entityName}', but that attribute does not exist in the schema`,
+              nodeId: node.id,
+              relatedNodeId: `dataverse_entity:${entityName}`,
+            });
+          }
+        }
       }
     }
   }

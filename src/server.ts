@@ -214,8 +214,10 @@ server.tool(
   },
   async ({ pipeline, environment, compare_env }) => {
     const build = manager.ensureGraph(environment);
+    const envName = environment ?? manager.getDefaultEnvironment();
+    const schemaPath = manager.getSchemaPath(envName);
     const compareResult = compare_env ? manager.ensureGraph(compare_env) : undefined;
-    const result = handleDeployReadiness(build.graph, pipeline, compareResult?.graph, compare_env);
+    const result = handleDeployReadiness(build.graph, pipeline, compareResult?.graph, compare_env, schemaPath);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );
@@ -359,7 +361,8 @@ server.tool(
   async ({ environment, severity }) => {
     const build = manager.ensureGraph(environment);
     const envName = environment ?? manager.getDefaultEnvironment();
-    const result = handleValidate(build.graph, envName, severity);
+    const schemaPath = manager.getSchemaPath(envName);
+    const result = handleValidate(build.graph, envName, severity, schemaPath);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   },
 );
