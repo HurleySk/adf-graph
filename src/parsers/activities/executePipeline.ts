@@ -55,14 +55,39 @@ export function parseExecutePipeline(
     }
 
     // Extract source table from source_object_name parameter
-    const sourceObjName = execParams.source_object_name;
-    if (typeof sourceObjName === "string" && sourceObjName.length > 0 && !sourceObjName.startsWith("@")) {
-      // Add dbo schema prefix if not already qualified
-      const tableName = sourceObjName.includes(".") ? sourceObjName : `dbo.${sourceObjName}`;
+    const sourceObjName = asString(execParams.source_object_name);
+    if (sourceObjName && sourceObjName.length > 0 && !sourceObjName.startsWith("@")) {
+      const srcSchema = asString(execParams.source_schema_name);
+      const schema = srcSchema && !srcSchema.startsWith("@") ? srcSchema : "dbo";
+      const tableName = sourceObjName.includes(".") ? sourceObjName : `${schema}.${sourceObjName}`;
       edges.push({
         from: activityNode.id,
         to: `${NodeType.Table}:${tableName}`,
         type: EdgeType.ReadsFrom,
+        metadata: {},
+      });
+    }
+
+    // Extract destination table from dest_object_name parameter
+    const destObjName = asString(execParams.dest_object_name);
+    if (destObjName && destObjName.length > 0 && !destObjName.startsWith("@")) {
+      const destSchema = asString(execParams.dest_schema_name);
+      const schema = destSchema && !destSchema.startsWith("@") ? destSchema : "dbo";
+      edges.push({
+        from: activityNode.id,
+        to: `${NodeType.Table}:${schema}.${destObjName}`,
+        type: EdgeType.WritesTo,
+        metadata: {},
+      });
+    }
+
+    // Extract Dataverse entity from dataverse_entity_name parameter
+    const dvEntityName = asString(execParams.dataverse_entity_name);
+    if (dvEntityName && dvEntityName.length > 0 && !dvEntityName.startsWith("@")) {
+      edges.push({
+        from: activityNode.id,
+        to: `${NodeType.DataverseEntity}:${dvEntityName}`,
+        type: EdgeType.WritesTo,
         metadata: {},
       });
     }

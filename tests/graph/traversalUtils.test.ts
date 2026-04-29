@@ -12,9 +12,10 @@ describe("findExecutePipelineActivities", () => {
     const { graph } = buildGraph(fixtureRoot);
     const pipelineId = makeNodeId(NodeType.Pipeline, "Test_Orchestrator");
     const activities = findExecutePipelineActivities(graph, pipelineId);
-    expect(activities.length).toBe(3);
+    expect(activities.length).toBe(4);
     const names = activities.map((a) => a.name);
     expect(names).toContain("Run Copy To Staging");
+    expect(names).toContain("Run CDC OnPrem");
     expect(names).toContain("Run SP Transform");
     expect(names).toContain("Run Copy To Dataverse");
   });

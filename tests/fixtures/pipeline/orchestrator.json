@@ -24,7 +24,39 @@
           "waitOnCompletion": true,
           "parameters": {
             "source_query": "SELECT org_id, org_name FROM dbo.Work_Item_Milestone WHERE active = 1",
-            "source_object_name": "LegacyOrg"
+            "source_object_name": "LegacyOrg",
+            "dest_object_name": "Org_Staging",
+            "dest_schema_name": "dbo",
+            "dataverse_entity_name": "alm_organization"
+          }
+        }
+      },
+      {
+        "name": "Run CDC OnPrem",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "CDC_OnPrem_Template",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_query": {
+              "value": "SELECT b.Work_Set_State_id, b.Work_Set_fk FROM dbo.Work_Set_State b JOIN dbo.Work_Set_FERC_Organization c ON b.Work_Set_fk = c.Work_Set_fk",
+              "type": "Expression"
+            },
+            "source_object_name": {
+              "value": "Work_Set_State",
+              "type": "Expression"
+            },
+            "source_schema_name": "dbo",
+            "dest_object_name": {
+              "value": "Agenda_Work_Set_State_Staging",
+              "type": "Expression"
+            },
+            "dest_schema_name": "dbo",
+            "dataverse_entity_name": "alm_worksetstate"
           }
         }
       },

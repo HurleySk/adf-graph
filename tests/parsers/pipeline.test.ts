@@ -17,22 +17,23 @@ describe("parsePipelineFile", () => {
     expect(pipeline!.name).toBe("Test_Orchestrator");
   });
 
-  it("extracts activity nodes (3 from orchestrator)", () => {
+  it("extracts activity nodes (4 from orchestrator)", () => {
     const result = parsePipelineFile(loadFixture("orchestrator.json"));
     const activities = result.nodes.filter((n) => n.type === "activity");
-    expect(activities).toHaveLength(3);
+    expect(activities).toHaveLength(4);
     expect(activities.map((a) => a.id)).toContain(
       "activity:Test_Orchestrator/Run Copy To Staging"
     );
   });
 
-  it("extracts ExecutePipeline edges (3 from orchestrator)", () => {
+  it("extracts ExecutePipeline edges (4 from orchestrator)", () => {
     const result = parsePipelineFile(loadFixture("orchestrator.json"));
     const executes = result.edges.filter((e) => e.type === "executes");
-    expect(executes).toHaveLength(3);
+    expect(executes).toHaveLength(4);
     expect(executes.map((e) => e.to)).toContain("pipeline:Copy_To_Staging");
     expect(executes.map((e) => e.to)).toContain("pipeline:SP_Transform");
     expect(executes.map((e) => e.to)).toContain("pipeline:Copy_To_Dataverse");
+    expect(executes.map((e) => e.to)).toContain("pipeline:CDC_OnPrem_Template");
   });
 
   it("extracts dependsOn edges (2 from orchestrator)", () => {
@@ -137,6 +138,73 @@ describe("parsePipelineFile", () => {
         e.to.startsWith("table:")
     );
     expect(readsFrom.map((e) => e.to)).toContain("table:dbo.LegacyOrg");
+  });
+
+  it("extracts writes_to edge from dest_object_name in ExecutePipeline", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const writesTo = result.edges.filter(
+      (e) =>
+        e.type === "writes_to" &&
+        e.from === "activity:Test_Orchestrator/Run Copy To Staging" &&
+        e.to.startsWith("table:")
+    );
+    expect(writesTo.map((e) => e.to)).toContain("table:dbo.Org_Staging");
+  });
+
+  it("extracts writes_to edge from dataverse_entity_name in ExecutePipeline", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const writesTo = result.edges.filter(
+      (e) =>
+        e.type === "writes_to" &&
+        e.from === "activity:Test_Orchestrator/Run Copy To Staging" &&
+        e.to.startsWith("dataverse_entity:")
+    );
+    expect(writesTo.map((e) => e.to)).toContain("dataverse_entity:alm_organization");
+  });
+
+  it("extracts source tables from Expression-wrapped source_query in ExecutePipeline", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const readsFrom = result.edges.filter(
+      (e) =>
+        e.type === "reads_from" &&
+        e.from === "activity:Test_Orchestrator/Run CDC OnPrem" &&
+        e.to.startsWith("table:")
+    );
+    expect(readsFrom.map((e) => e.to)).toContain("table:dbo.Work_Set_State");
+    expect(readsFrom.map((e) => e.to)).toContain("table:dbo.Work_Set_FERC_Organization");
+  });
+
+  it("extracts reads_from from Expression-wrapped source_object_name in ExecutePipeline", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const readsFrom = result.edges.filter(
+      (e) =>
+        e.type === "reads_from" &&
+        e.from === "activity:Test_Orchestrator/Run CDC OnPrem" &&
+        e.to.startsWith("table:")
+    );
+    expect(readsFrom.map((e) => e.to)).toContain("table:dbo.Work_Set_State");
+  });
+
+  it("extracts writes_to from Expression-wrapped dest_object_name in ExecutePipeline", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const writesTo = result.edges.filter(
+      (e) =>
+        e.type === "writes_to" &&
+        e.from === "activity:Test_Orchestrator/Run CDC OnPrem" &&
+        e.to.startsWith("table:")
+    );
+    expect(writesTo.map((e) => e.to)).toContain("table:dbo.Agenda_Work_Set_State_Staging");
+  });
+
+  it("extracts writes_to DV entity from Expression-unwrapped dataverse_entity_name", () => {
+    const result = parsePipelineFile(loadFixture("orchestrator.json"));
+    const writesTo = result.edges.filter(
+      (e) =>
+        e.type === "writes_to" &&
+        e.from === "activity:Test_Orchestrator/Run CDC OnPrem" &&
+        e.to.startsWith("dataverse_entity:")
+    );
+    expect(writesTo.map((e) => e.to)).toContain("dataverse_entity:alm_worksetstate");
   });
 
   it("extracts table from output dataset params (copy-to-staging writes table:dbo.Org_Staging)", () => {

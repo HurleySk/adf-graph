@@ -2,6 +2,7 @@ import { GraphNode, GraphEdge, NodeType, EdgeType } from "../../graph/model.js";
 import { extractTablesFromSql } from "../parseResult.js";
 import { asString } from "../../utils/expressionValue.js";
 
+
 export function processDatasetParams(
   activityId: string,
   params: Record<string, unknown>,
@@ -10,8 +11,8 @@ export function processDatasetParams(
 ): void {
   const edgeType = direction === "reads_from" ? EdgeType.ReadsFrom : EdgeType.WritesTo;
 
-  const entityName = params.entity_name;
-  if (typeof entityName === "string" && !entityName.startsWith("@")) {
+  const entityName = asString(params.entity_name);
+  if (entityName && !entityName.startsWith("@")) {
     edges.push({
       from: activityId,
       to: `${NodeType.DataverseEntity}:${entityName}`,
@@ -20,10 +21,10 @@ export function processDatasetParams(
     });
   }
 
-  const tableName = params.table_name;
-  const schemaName = params.schema_name;
-  if (typeof tableName === "string" && !tableName.startsWith("@")) {
-    const schema = typeof schemaName === "string" ? schemaName : "dbo";
+  const tableName = asString(params.table_name);
+  const schemaName = asString(params.schema_name);
+  if (tableName && !tableName.startsWith("@")) {
+    const schema = schemaName && !schemaName.startsWith("@") ? schemaName : "dbo";
     edges.push({
       from: activityId,
       to: `${NodeType.Table}:${schema}.${tableName}`,

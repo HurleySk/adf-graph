@@ -26,11 +26,12 @@ describe("buildGraph", () => {
     const orchestratorId = "pipeline:Test_Orchestrator";
     const outgoing = graph.getOutgoing(orchestratorId);
     const executes = outgoing.filter((e) => e.type === EdgeType.Executes);
-    expect(executes).toHaveLength(3);
+    expect(executes).toHaveLength(4);
     const targets = executes.map((e) => e.to);
     expect(targets).toContain("pipeline:Copy_To_Staging");
     expect(targets).toContain("pipeline:SP_Transform");
     expect(targets).toContain("pipeline:Copy_To_Dataverse");
+    expect(targets).toContain("pipeline:CDC_OnPrem_Template");
   });
 
   it("discovers 2 datasets from fixture files (plus possible stubs)", () => {
