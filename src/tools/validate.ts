@@ -1,6 +1,7 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { isStub, getParameterDefs } from "../graph/nodeMetadata.js";
 import { normalizeUri, extractDvOrg } from "../utils/connectionProperties.js";
+import { resolveDatasetLinkedServices } from "./toolUtils.js";
 
 export interface ValidationIssue {
   severity: "error" | "warning";
@@ -24,7 +25,7 @@ export function handleValidate(
 ): GraphValidationResult {
   const issues: ValidationIssue[] = [];
 
-  // ── Error checks ─────────────────────────────────────────────────────────
+  // ── Error checks (edge-based) ───────────────────────────────────────────
 
   for (const edge of graph.allEdges()) {
     const targetNode = graph.getNode(edge.to);
@@ -93,136 +94,126 @@ export function handleValidate(
     }
   }
 
-  // ── Warning checks ───────────────────────────────────────────────────────
+  // ── Node-based checks (single pass) ─────────────────────────────────────
 
   for (const node of graph.allNodes()) {
-    // 1. empty_param_default: Pipeline params with empty/null/undefined defaults
-    if (node.type === NodeType.Pipeline) {
-      const params = getParameterDefs(node);
-      for (const param of params) {
-        if (param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined) {
-          issues.push({
-            severity: "warning",
-            category: "empty_param_default",
-            message: `Pipeline '${node.name}' parameter '${param.name}' has empty/null default`,
-            nodeId: node.id,
-          });
-        }
-      }
-    }
-
-    // 2. unused_dataset: Dataset nodes with no incoming edges
-    if (node.type === NodeType.Dataset) {
-      const incoming = graph.getIncoming(node.id);
-      if (incoming.length === 0) {
-        issues.push({
-          severity: "warning",
-          category: "unused_dataset",
-          message: `Dataset '${node.name}' has no incoming edges (not referenced by any activity)`,
-          nodeId: node.id,
-        });
-      }
-    }
-
-    // 3. missing_linked_service: Dataset nodes with no uses_linked_service outgoing edge
-    if (node.type === NodeType.Dataset) {
-      const outgoing = graph.getOutgoing(node.id);
-      const hasLsEdge = outgoing.some((e) => e.type === EdgeType.UsesLinkedService);
-      if (!hasLsEdge) {
-        issues.push({
-          severity: "warning",
-          category: "missing_linked_service",
-          message: `Dataset '${node.name}' has no uses_linked_service edge`,
-          nodeId: node.id,
-        });
-      }
-    }
-
-    // 4. orphan_node: Nodes with zero edges in either direction (skip stubs)
-    if (!isStub(node)) {
-      const incoming = graph.getIncoming(node.id);
-      const outgoing = graph.getOutgoing(node.id);
-      if (incoming.length === 0 && outgoing.length === 0) {
-        issues.push({
-          severity: "warning",
-          category: "orphan_node",
-          message: `Node '${node.name}' (${node.type}) has no edges`,
-          nodeId: node.id,
-        });
-      }
-    }
-  }
-
-  // ── Cross-org URI mismatch check ────────────────────────────────────────
-
-  for (const node of graph.allNodes()) {
-    if (node.type !== NodeType.Activity) continue;
     const outgoing = graph.getOutgoing(node.id);
-    const dsEdges = outgoing.filter((e) => e.type === EdgeType.UsesDataset);
+    const incoming = graph.getIncoming(node.id);
 
-    const inputDs = dsEdges.filter((e) => e.metadata.direction === "input");
-    const outputDs = dsEdges.filter((e) => e.metadata.direction === "output");
-    if (inputDs.length === 0 || outputDs.length === 0) continue;
-
-    const sourceUris = resolveLinkedServiceUris(graph, inputDs.map((e) => e.to));
-    const sinkUris = resolveLinkedServiceUris(graph, outputDs.map((e) => e.to));
-    if (sourceUris.length === 0 || sinkUris.length === 0) continue;
-
-    for (const src of sourceUris) {
-      for (const snk of sinkUris) {
-        if (normalizeUri(src.uri) === normalizeUri(snk.uri)) continue;
-        const srcOrg = extractDvOrg(src.uri) ?? src.uri;
-        const snkOrg = extractDvOrg(snk.uri) ?? snk.uri;
-        issues.push({
-          severity: "warning",
-          category: "cross_org_uri_mismatch",
-          message: `Copy activity '${node.name}' reads from '${srcOrg}' (${src.uri}) but writes to '${snkOrg}' (${snk.uri}) — cross-org GUIDs will not match`,
-          nodeId: node.id,
-          relatedNodeId: snk.lsId,
-        });
-      }
-    }
-  }
-
-  // ── Dataverse schema validation ─────────────────────────────────────────
-  if (schemaPath) {
-    const dvEntities = graph.getNodesByType(NodeType.DataverseEntity);
-    for (const entity of dvEntities) {
-      if (isStub(entity)) {
-        issues.push({
-          severity: "warning",
-          category: "stub_dataverse_entity",
-          message: `Dataverse entity '${entity.name}' is referenced but has no schema definition`,
-          nodeId: entity.id,
-        });
-      }
-    }
-
-    for (const node of graph.allNodes()) {
-      if (node.type !== NodeType.Activity) continue;
-      const outgoing = graph.getOutgoing(node.id);
-      const writesToEntities = outgoing
-        .filter((e) => e.type === EdgeType.WritesTo && e.to.startsWith("dataverse_entity:"))
-        .map((e) => e.to.replace("dataverse_entity:", ""));
-      if (writesToEntities.length === 0) continue;
-
-      const mapColumnEdges = outgoing.filter((e) => e.type === EdgeType.MapsColumn);
-      for (const edge of mapColumnEdges) {
-        const sinkCol = edge.metadata.sinkColumn as string | undefined;
-        if (!sinkCol) continue;
-        for (const entityName of writesToEntities) {
-          const attrNodeId = `dataverse_attribute:${entityName}.${sinkCol}`;
-          if (!graph.getNode(attrNodeId)) {
+    switch (node.type) {
+      case NodeType.Pipeline: {
+        const params = getParameterDefs(node);
+        for (const param of params) {
+          if (param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined) {
             issues.push({
-              severity: "error",
-              category: "missing_dataverse_attribute",
-              message: `Activity '${node.name}' maps to attribute '${sinkCol}' on entity '${entityName}', but that attribute does not exist in the schema`,
+              severity: "warning",
+              category: "empty_param_default",
+              message: `Pipeline '${node.name}' parameter '${param.name}' has empty/null default`,
               nodeId: node.id,
-              relatedNodeId: `dataverse_entity:${entityName}`,
             });
           }
         }
+        break;
       }
+
+      case NodeType.Dataset: {
+        if (incoming.length === 0) {
+          issues.push({
+            severity: "warning",
+            category: "unused_dataset",
+            message: `Dataset '${node.name}' has no incoming edges (not referenced by any activity)`,
+            nodeId: node.id,
+          });
+        }
+        if (!outgoing.some((e) => e.type === EdgeType.UsesLinkedService)) {
+          issues.push({
+            severity: "warning",
+            category: "missing_linked_service",
+            message: `Dataset '${node.name}' has no uses_linked_service edge`,
+            nodeId: node.id,
+          });
+        }
+        break;
+      }
+
+      case NodeType.DataverseEntity: {
+        if (schemaPath && isStub(node)) {
+          issues.push({
+            severity: "warning",
+            category: "stub_dataverse_entity",
+            message: `Dataverse entity '${node.name}' is referenced but has no schema definition`,
+            nodeId: node.id,
+          });
+        }
+        break;
+      }
+
+      case NodeType.Activity: {
+        // Cross-org URI mismatch
+        const dsEdges = outgoing.filter((e) => e.type === EdgeType.UsesDataset);
+        const inputDs = dsEdges.filter((e) => e.metadata.direction === "input");
+        const outputDs = dsEdges.filter((e) => e.metadata.direction === "output");
+
+        if (inputDs.length > 0 && outputDs.length > 0) {
+          const srcLs = resolveDatasetLinkedServices(graph, inputDs.map((e) => e.to))
+            .filter((ls) => ls.lsType === "CommonDataServiceForApps" && ls.connectionProperties.serviceUri);
+          const snkLs = resolveDatasetLinkedServices(graph, outputDs.map((e) => e.to))
+            .filter((ls) => ls.lsType === "CommonDataServiceForApps" && ls.connectionProperties.serviceUri);
+
+          for (const src of srcLs) {
+            for (const snk of snkLs) {
+              if (normalizeUri(src.connectionProperties.serviceUri) === normalizeUri(snk.connectionProperties.serviceUri)) continue;
+              const srcOrg = extractDvOrg(src.connectionProperties.serviceUri) ?? src.connectionProperties.serviceUri;
+              const snkOrg = extractDvOrg(snk.connectionProperties.serviceUri) ?? snk.connectionProperties.serviceUri;
+              issues.push({
+                severity: "warning",
+                category: "cross_org_uri_mismatch",
+                message: `Copy activity '${node.name}' reads from '${srcOrg}' (${src.connectionProperties.serviceUri}) but writes to '${snkOrg}' (${snk.connectionProperties.serviceUri}) — cross-org GUIDs will not match`,
+                nodeId: node.id,
+                relatedNodeId: snk.lsId,
+              });
+            }
+          }
+        }
+
+        // Schema attribute validation
+        if (schemaPath) {
+          const writesToEntities = outgoing
+            .filter((e) => e.type === EdgeType.WritesTo && e.to.startsWith("dataverse_entity:"))
+            .map((e) => e.to.replace("dataverse_entity:", ""));
+
+          if (writesToEntities.length > 0) {
+            const mapColumnEdges = outgoing.filter((e) => e.type === EdgeType.MapsColumn);
+            for (const edge of mapColumnEdges) {
+              const sinkCol = edge.metadata.sinkColumn as string | undefined;
+              if (!sinkCol) continue;
+              for (const entityName of writesToEntities) {
+                const attrNodeId = `dataverse_attribute:${entityName}.${sinkCol}`;
+                if (!graph.getNode(attrNodeId)) {
+                  issues.push({
+                    severity: "error",
+                    category: "missing_dataverse_attribute",
+                    message: `Activity '${node.name}' maps to attribute '${sinkCol}' on entity '${entityName}', but that attribute does not exist in the schema`,
+                    nodeId: node.id,
+                    relatedNodeId: `dataverse_entity:${entityName}`,
+                  });
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    // Orphan check applies to all non-stub node types
+    if (!isStub(node) && incoming.length === 0 && outgoing.length === 0) {
+      issues.push({
+        severity: "warning",
+        category: "orphan_node",
+        message: `Node '${node.name}' (${node.type}) has no edges`,
+        nodeId: node.id,
+      });
     }
   }
 
@@ -240,28 +231,4 @@ export function handleValidate(
     issueCount: { errors, warnings },
     issues: filtered,
   };
-}
-
-interface LinkedServiceUri {
-  lsId: string;
-  uri: string;
-}
-
-function resolveLinkedServiceUris(graph: Graph, datasetIds: string[]): LinkedServiceUri[] {
-  const results: LinkedServiceUri[] = [];
-  for (const dsId of datasetIds) {
-    const dsNode = graph.getNode(dsId);
-    if (!dsNode) continue;
-    for (const edge of graph.getOutgoing(dsId)) {
-      if (edge.type !== EdgeType.UsesLinkedService) continue;
-      const lsNode = graph.getNode(edge.to);
-      if (!lsNode) continue;
-      const lsType = lsNode.metadata.linkedServiceType as string | undefined;
-      if (lsType !== "CommonDataServiceForApps") continue;
-      const cp = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
-      const uri = cp?.serviceUri;
-      if (uri) results.push({ lsId: lsNode.id, uri });
-    }
-  }
-  return results;
 }

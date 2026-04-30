@@ -1,4 +1,4 @@
-import { Graph, EdgeType } from "../graph/model.js";
+import { Graph, GraphNode, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode } from "./toolUtils.js";
 import { parseActivityId } from "../utils/nodeId.js";
 
@@ -22,6 +22,20 @@ export interface TraceConnectionResult {
   activity?: string;
   chains: ConnectionChain[];
   error?: string;
+}
+
+function makeStep(
+  node: GraphNode,
+  edgeType: string,
+  role?: "source" | "sink",
+): ConnectionChainStep {
+  return {
+    nodeType: node.type,
+    name: node.name,
+    edgeType,
+    metadata: node.metadata,
+    ...(role ? { role } : {}),
+  };
 }
 
 export function handleTraceConnection(
@@ -103,13 +117,7 @@ function walkActivities(
       const dir = dsEdge.metadata.direction as string | undefined;
       const role = dir === "input" ? "source" as const : dir === "output" ? "sink" as const : undefined;
 
-      steps.push({
-        nodeType: dsNode.type,
-        name: dsNode.name,
-        edgeType: dsEdge.type,
-        metadata: dsNode.metadata,
-        ...(role ? { role } : {}),
-      });
+      steps.push(makeStep(dsNode, dsEdge.type, role));
 
       for (const lsEdge of graph.getOutgoing(dsNode.id)) {
         if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
@@ -139,37 +147,19 @@ function appendLinkedServiceChain(
   const lsNode = graph.getNode(lsNodeId);
   if (!lsNode) return;
 
-  steps.push({
-    nodeType: lsNode.type,
-    name: lsNode.name,
-    edgeType,
-    metadata: lsNode.metadata,
-    ...(role ? { role } : {}),
-  });
+  steps.push(makeStep(lsNode, edgeType, role));
 
   for (const secEdge of graph.getOutgoing(lsNodeId)) {
     if (secEdge.type !== EdgeType.ReferencesSecret) continue;
     const secNode = graph.getNode(secEdge.to);
     if (!secNode) continue;
-    steps.push({
-      nodeType: secNode.type,
-      name: secNode.name,
-      edgeType: secEdge.type,
-      metadata: secNode.metadata,
-      ...(role ? { role } : {}),
-    });
+    steps.push(makeStep(secNode, secEdge.type, role));
   }
 
   for (const vaultEdge of graph.getOutgoing(lsNodeId)) {
     if (vaultEdge.type !== EdgeType.UsesLinkedService) continue;
     const vaultNode = graph.getNode(vaultEdge.to);
     if (!vaultNode) continue;
-    steps.push({
-      nodeType: vaultNode.type,
-      name: vaultNode.name,
-      edgeType: vaultEdge.type,
-      metadata: vaultNode.metadata,
-      ...(role ? { role } : {}),
-    });
+    steps.push(makeStep(vaultNode, vaultEdge.type, role));
   }
 }

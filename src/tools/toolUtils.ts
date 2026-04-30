@@ -165,6 +165,41 @@ export function resolveActivityParams(graph: Graph, activityNode: GraphNode): Re
     : (meta.pipelineParameters ?? {});
 }
 
+export interface DatasetLinkedService {
+  datasetId: string;
+  datasetName: string;
+  lsId: string;
+  lsName: string;
+  lsType: string;
+  connectionProperties: Record<string, string>;
+}
+
+export function resolveDatasetLinkedServices(
+  graph: Graph,
+  datasetIds: string[],
+): DatasetLinkedService[] {
+  const results: DatasetLinkedService[] = [];
+  for (const dsId of datasetIds) {
+    const dsNode = graph.getNode(dsId);
+    if (!dsNode) continue;
+    for (const edge of graph.getOutgoing(dsId)) {
+      if (edge.type !== EdgeType.UsesLinkedService) continue;
+      const lsNode = graph.getNode(edge.to);
+      if (!lsNode) continue;
+      const cp = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
+      results.push({
+        datasetId: dsId,
+        datasetName: dsNode.name,
+        lsId: lsNode.id,
+        lsName: lsNode.name,
+        lsType: (lsNode.metadata.linkedServiceType as string) ?? "",
+        connectionProperties: cp ?? {},
+      });
+    }
+  }
+  return results;
+}
+
 export const TRUNCATE_PATTERN = /TRUNCATE\s+TABLE/i;
 
 export interface TableEdgeInfo {

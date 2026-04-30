@@ -1,7 +1,7 @@
 import { Graph, NodeType, EdgeType, type GraphEdge } from "../graph/model.js";
 import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseNodeId } from "../utils/nodeId.js";
-import { lookupPipelineNode } from "./toolUtils.js";
+import { lookupPipelineNode, resolveDatasetLinkedServices } from "./toolUtils.js";
 import { resolveChildParameters, type ResolvedChildPipeline } from "../utils/parameterResolver.js";
 
 export type DescribeDepth = "summary" | "activities" | "full" | "resolved";
@@ -214,25 +214,13 @@ function resolveConnectionInfo(
   actOutgoing: GraphEdge[],
   direction: "input" | "output",
 ): ConnectionInfo[] {
-  const conns: ConnectionInfo[] = [];
-  const dsEdges = actOutgoing.filter(
-    (e) => e.type === EdgeType.UsesDataset && e.metadata.direction === direction,
-  );
-  for (const dsEdge of dsEdges) {
-    const dsNode = graph.getNode(dsEdge.to);
-    if (!dsNode) continue;
-    for (const lsEdge of graph.getOutgoing(dsEdge.to)) {
-      if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
-      const lsNode = graph.getNode(lsEdge.to);
-      if (!lsNode) continue;
-      const cp = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
-      conns.push({
-        datasetName: dsNode.name,
-        linkedServiceName: lsNode.name,
-        linkedServiceType: (lsNode.metadata.linkedServiceType as string) ?? "",
-        connectionProperties: cp ?? {},
-      });
-    }
-  }
-  return conns;
+  const dsIds = actOutgoing
+    .filter((e) => e.type === EdgeType.UsesDataset && e.metadata.direction === direction)
+    .map((e) => e.to);
+  return resolveDatasetLinkedServices(graph, dsIds).map((ls) => ({
+    datasetName: ls.datasetName,
+    linkedServiceName: ls.lsName,
+    linkedServiceType: ls.lsType,
+    connectionProperties: ls.connectionProperties,
+  }));
 }
