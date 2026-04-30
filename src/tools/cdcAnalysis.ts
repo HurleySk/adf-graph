@@ -1,11 +1,9 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { getActivityMetadata, getActivityType } from "../graph/nodeMetadata.js";
-import { lookupPipelineNode } from "./toolUtils.js";
-import { resolveChildParameters, type ResolvedChildPipeline } from "../utils/parameterResolver.js";
+import { getActivityMetadata } from "../graph/nodeMetadata.js";
+import { lookupPipelineNode, resolveActivityParams, getTableEdges } from "./toolUtils.js";
 import { detectCdcPattern, isCdcPipeline, classifyStagingRole, type CdcPipelineInfo, type StagingRole } from "../utils/cdcPatterns.js";
 import { extractWhereClause, type FilterCondition, type WhereClause } from "../parsers/sqlWhereParser.js";
-import { parseActivityId, makeTableId } from "../utils/nodeId.js";
-import { asNonDynamic } from "../utils/expressionValue.js";
+import { makeTableId } from "../utils/nodeId.js";
 
 export interface CdcStagingTable {
   name: string;
@@ -49,37 +47,19 @@ export interface CdcAnalysisResult {
   error?: string;
 }
 
-const TRUNCATE_PATTERN = /TRUNCATE\s+TABLE/i;
-
 function getTableUsage(graph: Graph, tableName: string): { writers: string[]; readers: string[]; hasTruncate: boolean } {
-  let tableId = makeTableId("dbo", tableName);
-  let node = graph.getNode(tableId);
-  if (!node) {
-    tableId = `table:${tableName}`;
-    node = graph.getNode(tableId);
-  }
-  if (!node) return { writers: [], readers: [], hasTruncate: false };
-
-  const incoming = graph.getIncoming(tableId);
+  const edges = getTableEdges(graph, tableName);
   const writers: string[] = [];
   const readers: string[] = [];
   let hasTruncate = false;
 
-  for (const edge of incoming) {
-    const fromNode = graph.getNode(edge.from);
-    if (!fromNode) continue;
-
-    if (fromNode.type === NodeType.Activity) {
-      const { pipeline, activity } = parseActivityId(edge.from);
-      const label = `${pipeline}/${activity}`;
-
-      if (edge.type === EdgeType.WritesTo) {
-        writers.push(label);
-        const meta = getActivityMetadata(fromNode);
-        if (meta.sqlQuery && TRUNCATE_PATTERN.test(meta.sqlQuery)) hasTruncate = true;
-      } else if (edge.type === EdgeType.ReadsFrom) {
-        readers.push(label);
-      }
+  for (const e of edges) {
+    const label = `${e.pipeline}/${e.activity}`;
+    if (e.edgeType === EdgeType.WritesTo) {
+      writers.push(label);
+      if (e.hasTruncate) hasTruncate = true;
+    } else if (e.edgeType === EdgeType.ReadsFrom) {
+      readers.push(label);
     }
   }
 
@@ -242,10 +222,7 @@ export function handleCdcAnalysis(
 
       // Check if this is an ExecutePipeline calling a CDC child
       if (meta.activityType === "ExecutePipeline" && meta.pipelineParameters) {
-        const resolved = resolveChildParameters(graph, actNode);
-        const params = resolved
-          ? Object.fromEntries(resolved.resolvedParameters.map((p) => [p.name, p.resolvedValue]))
-          : meta.pipelineParameters;
+        const params = resolveActivityParams(graph, actNode);
 
         if (isCdcPipeline(params as Record<string, unknown>)) {
           const cdcInfo = detectCdcPattern(params as Record<string, unknown>);

@@ -1,5 +1,6 @@
 import { Graph, EdgeType, GraphEdge, NodeType } from "../graph/model.js";
-import { makeEntityId, makeNodeId, makeAttributeId } from "../utils/nodeId.js";
+import { makeAttributeId } from "../utils/nodeId.js";
+import { resolveEntityOrTableNode } from "./toolUtils.js";
 
 export type LineageDirection = "upstream" | "downstream";
 
@@ -108,35 +109,9 @@ export function handleDataLineage(
     limit,
     offset,
   } = options ?? {};
-  // Resolve node ID: try dataverse_entity first, then table (exact), then dbo-prefixed, then scan
-  let nodeId = makeEntityId(entity);
-  if (!graph.getNode(nodeId)) {
-    nodeId = makeNodeId(NodeType.Table, entity);
-  }
-  if (!graph.getNode(nodeId)) {
-    // Try with dbo schema prefix (most common)
-    nodeId = makeNodeId(NodeType.Table, `dbo.${entity}`);
-  }
-  if (!graph.getNode(nodeId)) {
-    // Scan all table nodes for a case-insensitive name match (handles any schema)
-    const entityLower = entity.toLowerCase();
-    const tableNodes = graph.getNodesByType(NodeType.Table);
-    const match = tableNodes.find((n) => {
-      // Match against full id suffix (e.g., "dbo.Foo") or just the table name
-      const idSuffix = n.id.slice("table:".length);
-      if (idSuffix.toLowerCase() === entityLower) return true;
-      // Also match just the table name part (after the schema dot)
-      const dotIdx = idSuffix.indexOf(".");
-      if (dotIdx >= 0 && idSuffix.slice(dotIdx + 1).toLowerCase() === entityLower) return true;
-      return false;
-    });
-    if (match) {
-      nodeId = match.id;
-    }
-  }
-
-  const node = graph.getNode(nodeId);
-  if (!node) {
+  const resolvedId = resolveEntityOrTableNode(graph, entity);
+  const node = resolvedId ? graph.getNode(resolvedId) : undefined;
+  if (!node || !resolvedId) {
     const errorMsg = `Node for '${entity}' not found as dataverse_entity or table`;
     if (detail === "summary") {
       return {
@@ -167,7 +142,7 @@ export function handleDataLineage(
 
   if (direction === "upstream") {
     // Standard upstream traversal
-    const traversalResults = graph.traverseUpstream(nodeId, maxDepth);
+    const traversalResults = graph.traverseUpstream(resolvedId, maxDepth);
 
     for (const r of traversalResults) {
       if (visitedNodes.has(r.node.id)) continue;
@@ -210,7 +185,7 @@ export function handleDataLineage(
     }
   } else {
     // Downstream: standard traversal from the node
-    const traversalResults = graph.traverseDownstream(nodeId, maxDepth);
+    const traversalResults = graph.traverseDownstream(resolvedId, maxDepth);
 
     for (const r of traversalResults) {
       if (visitedNodes.has(r.node.id)) continue;
@@ -228,7 +203,7 @@ export function handleDataLineage(
 
     // Also find activities that read FROM this node (reads_from reverse linkage)
     // These represent downstream data consumers not captured by standard traversal
-    const incomingEdges = graph.getIncoming(nodeId);
+    const incomingEdges = graph.getIncoming(resolvedId);
     for (const edge of incomingEdges) {
       if (edge.type !== EdgeType.ReadsFrom) continue;
       const activityId = edge.from;
@@ -306,8 +281,8 @@ export function handleDataLineage(
 
     // Also from standard traversal
     const traversalResults = direction === "upstream"
-      ? graph.traverseUpstream(nodeId, maxDepth)
-      : graph.traverseDownstream(nodeId, maxDepth);
+      ? graph.traverseUpstream(resolvedId, maxDepth)
+      : graph.traverseDownstream(resolvedId, maxDepth);
     for (const r of traversalResults) {
       if (r.node.id.startsWith("activity:")) {
         allActivityIds.add(r.node.id);
@@ -357,8 +332,8 @@ export function handleDataLineage(
     // DataverseAttribute cross-reference: when the target is a Dataverse entity,
     // validate the attribute against the graph and scan all activity MapsColumn edges
     // to catch any mappings not already covered above.
-    const entityName = nodeId.startsWith(`${NodeType.DataverseEntity}:`)
-      ? nodeId.slice(`${NodeType.DataverseEntity}:`.length)
+    const entityName = resolvedId.startsWith(`${NodeType.DataverseEntity}:`)
+      ? resolvedId.slice(`${NodeType.DataverseEntity}:`.length)
       : null;
     if (entityName !== null) {
       const attrNodeId = makeAttributeId(entityName, attribute);

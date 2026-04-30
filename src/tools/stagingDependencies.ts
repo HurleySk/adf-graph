@@ -1,6 +1,7 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseActivityId, parseNodeId, makePipelineId } from "../utils/nodeId.js";
+import { TRUNCATE_PATTERN } from "./toolUtils.js";
 
 export interface TablePipelineUsage {
   pipeline: string;
@@ -27,8 +28,6 @@ export interface StagingDependenciesResult {
   };
   warnings: string[];
 }
-
-const TRUNCATE_PATTERN = /TRUNCATE\s+TABLE/i;
 
 function activityHasTruncateFor(graph: Graph, activityId: string, tableName: string): boolean {
   const node = graph.getNode(activityId);

@@ -1,8 +1,9 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
-import { makeNodeId, makeEntityId, makePipelineId } from "../utils/nodeId.js";
+import { makeNodeId, makeEntityId, makePipelineId, makeTableId, parseActivityId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { loadEntityDetail } from "../parsers/dataverseSchema.js";
-import { getParameterDefs } from "../graph/nodeMetadata.js";
+import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { resolveChildParameters } from "../utils/parameterResolver.js";
 
 export interface PipelineLookupSuccess {
   node: GraphNode;
@@ -130,4 +131,92 @@ export function resolveDestQueryDefaults(
     pipelineName: pipelineNode.name,
     pipelineId: pipelineNode.id,
   };
+}
+
+export function resolveEntityOrTableNode(graph: Graph, entity: string): string | null {
+  let nodeId = makeEntityId(entity);
+  if (graph.getNode(nodeId)) return nodeId;
+
+  nodeId = makeNodeId(NodeType.Table, entity);
+  if (graph.getNode(nodeId)) return nodeId;
+
+  nodeId = makeNodeId(NodeType.Table, `dbo.${entity}`);
+  if (graph.getNode(nodeId)) return nodeId;
+
+  const entityLower = entity.toLowerCase();
+  const tableNodes = graph.getNodesByType(NodeType.Table);
+  const match = tableNodes.find((n) => {
+    const idSuffix = n.id.slice("table:".length);
+    if (idSuffix.toLowerCase() === entityLower) return true;
+    const dotIdx = idSuffix.indexOf(".");
+    if (dotIdx >= 0 && idSuffix.slice(dotIdx + 1).toLowerCase() === entityLower) return true;
+    return false;
+  });
+  return match?.id ?? null;
+}
+
+export function resolveActivityParams(graph: Graph, activityNode: GraphNode): Record<string, unknown> {
+  const meta = getActivityMetadata(activityNode);
+  if (meta.activityType !== "ExecutePipeline") return {};
+
+  const resolved = resolveChildParameters(graph, activityNode);
+  return resolved
+    ? Object.fromEntries(resolved.resolvedParameters.map((p) => [p.name, p.resolvedValue]))
+    : (meta.pipelineParameters ?? {});
+}
+
+export const TRUNCATE_PATTERN = /TRUNCATE\s+TABLE/i;
+
+export interface TableEdgeInfo {
+  pipeline: string;
+  activity: string;
+  edgeType: EdgeType;
+  hasTruncate: boolean;
+  fromNodeType: NodeType;
+  fromNodeName: string;
+}
+
+export function getTableEdges(graph: Graph, tableName: string): TableEdgeInfo[] {
+  let tableId = makeTableId("dbo", tableName);
+  let node = graph.getNode(tableId);
+  if (!node) {
+    tableId = `table:${tableName}`;
+    node = graph.getNode(tableId);
+  }
+  if (!node) return [];
+
+  const results: TableEdgeInfo[] = [];
+  const incoming = graph.getIncoming(tableId);
+
+  for (const edge of incoming) {
+    if (edge.type !== EdgeType.WritesTo && edge.type !== EdgeType.ReadsFrom) continue;
+    const fromNode = graph.getNode(edge.from);
+    if (!fromNode) continue;
+
+    let pipeline = "";
+    let activity = "";
+
+    if (fromNode.type === NodeType.Activity) {
+      const parsed = parseActivityId(edge.from);
+      pipeline = parsed.pipeline;
+      activity = parsed.activity;
+    } else {
+      pipeline = `(${fromNode.type})`;
+      activity = fromNode.name;
+    }
+
+    const meta = fromNode.type === NodeType.Activity ? getActivityMetadata(fromNode) : null;
+    const hasTruncate = !!(meta?.sqlQuery && TRUNCATE_PATTERN.test(meta.sqlQuery));
+
+    results.push({
+      pipeline,
+      activity,
+      edgeType: edge.type,
+      hasTruncate,
+      fromNodeType: fromNode.type,
+      fromNodeName: fromNode.name,
+    });
+  }
+
+  return results;
 }

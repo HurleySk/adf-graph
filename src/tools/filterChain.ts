@@ -1,10 +1,9 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
-import { makeEntityId, makeNodeId } from "../utils/nodeId.js";
-import { extractWhereClause, type WhereClause } from "../parsers/sqlWhereParser.js";
-import { resolveChildParameters } from "../utils/parameterResolver.js";
-import { asNonDynamic } from "../utils/expressionValue.js";
 import { parseActivityId } from "../utils/nodeId.js";
+import { extractWhereClause, type WhereClause } from "../parsers/sqlWhereParser.js";
+import { asNonDynamic } from "../utils/expressionValue.js";
+import { resolveEntityOrTableNode, resolveActivityParams } from "./toolUtils.js";
 
 export interface FilterStep {
   pipeline: string;
@@ -27,28 +26,6 @@ export interface FilterChainResult {
   error?: string;
 }
 
-function resolveEntityNodeId(graph: Graph, entity: string): string | null {
-  let nodeId = makeEntityId(entity);
-  if (graph.getNode(nodeId)) return nodeId;
-
-  nodeId = makeNodeId(NodeType.Table, entity);
-  if (graph.getNode(nodeId)) return nodeId;
-
-  nodeId = makeNodeId(NodeType.Table, `dbo.${entity}`);
-  if (graph.getNode(nodeId)) return nodeId;
-
-  const entityLower = entity.toLowerCase();
-  const tableNodes = graph.getNodesByType(NodeType.Table);
-  const match = tableNodes.find((n) => {
-    const idSuffix = n.id.slice("table:".length);
-    if (idSuffix.toLowerCase() === entityLower) return true;
-    const dotIdx = idSuffix.indexOf(".");
-    if (dotIdx >= 0 && idSuffix.slice(dotIdx + 1).toLowerCase() === entityLower) return true;
-    return false;
-  });
-  return match?.id ?? null;
-}
-
 export function handleFilterChain(
   graph: Graph,
   entity: string,
@@ -56,7 +33,7 @@ export function handleFilterChain(
   const warnings: string[] = [];
   const chain: FilterStep[] = [];
 
-  const nodeId = resolveEntityNodeId(graph, entity);
+  const nodeId = resolveEntityOrTableNode(graph, entity);
   if (!nodeId) {
     return {
       entity,
@@ -97,10 +74,7 @@ export function handleFilterChain(
 
     // 2. ExecutePipeline with embedded SQL in parameters
     if (meta.activityType === "ExecutePipeline" && meta.pipelineParameters) {
-      const resolved = resolveChildParameters(graph, result.node);
-      const params = resolved
-        ? Object.fromEntries(resolved.resolvedParameters.map((p) => [p.name, p.resolvedValue]))
-        : meta.pipelineParameters;
+      const params = resolveActivityParams(graph, result.node);
 
       for (const [key, val] of Object.entries(params)) {
         if (key !== "source_query" && key !== "dest_query") continue;

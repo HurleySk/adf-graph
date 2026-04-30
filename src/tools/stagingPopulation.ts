@@ -1,12 +1,10 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
-import { lookupPipelineNode, resolveDestQueryDefaults } from "./toolUtils.js";
-import { resolveChildParameters } from "../utils/parameterResolver.js";
+import { lookupPipelineNode, resolveDestQueryDefaults, resolveActivityParams, getTableEdges } from "./toolUtils.js";
 import { detectCdcPattern, classifyStagingRole, isCdcPipeline, type CdcPipelineInfo, type StagingRole } from "../utils/cdcPatterns.js";
 import { extractAllTablesFromSql } from "../parsers/parseResult.js";
 import { extractWhereClause } from "../parsers/sqlWhereParser.js";
-import { parseActivityId, makeTableId } from "../utils/nodeId.js";
-import { asNonDynamic } from "../utils/expressionValue.js";
+import { makeTableId } from "../utils/nodeId.js";
 
 export type StagingPopulationRole = StagingRole | "manual_inclusion" | "dv_mirror";
 
@@ -39,44 +37,20 @@ function findTableUsage(graph: Graph, tableName: string): {
   populatedBy: Array<{ pipeline: string; activity: string; mechanism: string }>;
   consumedBy: Array<{ pipeline: string; activity: string; context: string }>;
 } {
+  const edges = getTableEdges(graph, tableName);
   const populatedBy: Array<{ pipeline: string; activity: string; mechanism: string }> = [];
   const consumedBy: Array<{ pipeline: string; activity: string; context: string }> = [];
 
-  // Try both with and without schema prefix
-  const candidates = [
-    makeTableId("dbo", tableName),
-    `table:${tableName}`,
-  ];
-
-  for (const tableId of candidates) {
-    const node = graph.getNode(tableId);
-    if (!node) continue;
-
-    const incoming = graph.getIncoming(tableId);
-    for (const edge of incoming) {
-      const fromNode = graph.getNode(edge.from);
-      if (!fromNode) continue;
-
-      if (fromNode.type === NodeType.Activity) {
-        const { pipeline, activity } = parseActivityId(edge.from);
-        const meta = getActivityMetadata(fromNode);
-        if (edge.type === EdgeType.WritesTo) {
-          const mechanism = meta.sqlQuery && /TRUNCATE\s+TABLE/i.test(meta.sqlQuery)
-            ? "truncate_insert"
-            : meta.activityType === "SqlServerStoredProcedure" ? "stored_procedure" : "copy";
-          populatedBy.push({ pipeline, activity, mechanism });
-        } else if (edge.type === EdgeType.ReadsFrom) {
-          consumedBy.push({ pipeline, activity, context: "source_query" });
-        }
-      } else if (fromNode.type === NodeType.StoredProcedure) {
-        if (edge.type === EdgeType.WritesTo) {
-          populatedBy.push({ pipeline: "(stored procedure)", activity: fromNode.name, mechanism: "stored_procedure" });
-        } else if (edge.type === EdgeType.ReadsFrom) {
-          consumedBy.push({ pipeline: "(stored procedure)", activity: fromNode.name, context: "sp_read" });
-        }
-      }
+  for (const e of edges) {
+    if (e.edgeType === EdgeType.WritesTo) {
+      const mechanism = e.hasTruncate
+        ? "truncate_insert"
+        : e.fromNodeType === NodeType.StoredProcedure ? "stored_procedure" : "copy";
+      populatedBy.push({ pipeline: e.pipeline, activity: e.activity, mechanism });
+    } else if (e.edgeType === EdgeType.ReadsFrom) {
+      const context = e.fromNodeType === NodeType.StoredProcedure ? "sp_read" : "source_query";
+      consumedBy.push({ pipeline: e.pipeline, activity: e.activity, context });
     }
-    if (populatedBy.length > 0 || consumedBy.length > 0) break;
   }
 
   return { populatedBy, consumedBy };
@@ -122,12 +96,8 @@ export function handleStagingPopulation(
     const meta = getActivityMetadata(actNode);
     if (meta.activityType !== "ExecutePipeline" || !meta.pipelineParameters) continue;
 
-    const resolved = resolveChildParameters(graph, actNode);
-    if (!resolved) continue;
-
-    const params = Object.fromEntries(
-      resolved.resolvedParameters.map((p) => [p.name, p.resolvedValue]),
-    );
+    const params = resolveActivityParams(graph, actNode);
+    if (Object.keys(params).length === 0) continue;
 
     if (isCdcPipeline(params as Record<string, unknown>)) {
       cdcInfo = detectCdcPattern(params as Record<string, unknown>);
