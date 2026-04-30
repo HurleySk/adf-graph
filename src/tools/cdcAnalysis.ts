@@ -52,8 +52,12 @@ export interface CdcAnalysisResult {
 const TRUNCATE_PATTERN = /TRUNCATE\s+TABLE/i;
 
 function getTableUsage(graph: Graph, tableName: string): { writers: string[]; readers: string[]; hasTruncate: boolean } {
-  const tableId = makeTableId("dbo", tableName);
-  const node = graph.getNode(tableId);
+  let tableId = makeTableId("dbo", tableName);
+  let node = graph.getNode(tableId);
+  if (!node) {
+    tableId = `table:${tableName}`;
+    node = graph.getNode(tableId);
+  }
   if (!node) return { writers: [], readers: [], hasTruncate: false };
 
   const incoming = graph.getIncoming(tableId);

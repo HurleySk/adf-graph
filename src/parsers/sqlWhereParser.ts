@@ -65,10 +65,12 @@ export function extractWhereClause(sql: string): WhereClause | null {
     if (whereEnd !== sql.length) break;
   }
 
-  const raw = sql.substring(whereStart, whereEnd).trim();
+  const rawUntrimmed = sql.substring(whereStart, whereEnd);
+  const leadingSpaces = rawUntrimmed.length - rawUntrimmed.trimStart().length;
+  const raw = rawUntrimmed.trim();
   if (!raw) return null;
 
-  const conditions = parseConditions(raw, depth.slice(whereStart, whereEnd));
+  const conditions = parseConditions(raw, depth.slice(whereStart + leadingSpaces, whereStart + leadingSpaces + raw.length));
   return { raw, conditions };
 }
 

@@ -2,15 +2,17 @@ import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
 import { lookupPipelineNode, resolveDestQueryDefaults } from "./toolUtils.js";
 import { resolveChildParameters } from "../utils/parameterResolver.js";
-import { detectCdcPattern, classifyStagingRole, isCdcPipeline, type CdcPipelineInfo } from "../utils/cdcPatterns.js";
+import { detectCdcPattern, classifyStagingRole, isCdcPipeline, type CdcPipelineInfo, type StagingRole } from "../utils/cdcPatterns.js";
 import { extractAllTablesFromSql } from "../parsers/parseResult.js";
 import { extractWhereClause } from "../parsers/sqlWhereParser.js";
 import { parseActivityId, makeTableId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 
+export type StagingPopulationRole = StagingRole | "manual_inclusion" | "dv_mirror";
+
 export interface StagingTableRole {
   table: string;
-  role: string;
+  role: StagingPopulationRole;
   roleEvidence: string;
   referencedInDestQuery: boolean;
   destQueryContext: string | null;
@@ -174,7 +176,7 @@ export function handleStagingPopulation(
     const simpleName = tableName.includes(".") ? tableName.split(".").pop()! : tableName;
 
     // Classify role
-    let role: string;
+    let role: StagingPopulationRole;
     let roleEvidence: string;
 
     if (cdcInfo) {
