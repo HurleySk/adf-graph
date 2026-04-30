@@ -1,4 +1,4 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { Graph, NodeType, EdgeType, type GraphEdge } from "../graph/model.js";
 import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseNodeId } from "../utils/nodeId.js";
 import { lookupPipelineNode } from "./toolUtils.js";
@@ -146,7 +146,7 @@ export function handleDescribePipeline(
       if (effectiveDepth === "full" || effectiveDepth === "resolved") {
         const sources = actOutgoing
           .filter((e) => e.type === EdgeType.ReadsFrom ||
-            (e.type === EdgeType.UsesDataset && (e.metadata.direction === "input" || !e.metadata.direction)))
+            (e.type === EdgeType.UsesDataset && e.metadata.direction === "input"))
           .map((e) => e.to);
 
         const sinks = actOutgoing
@@ -208,8 +208,6 @@ export function handleDescribePipeline(
 
   return result;
 }
-
-import type { GraphEdge } from "../graph/model.js";
 
 function resolveConnectionInfo(
   graph: Graph,
