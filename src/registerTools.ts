@@ -34,6 +34,7 @@ import { handleGenerateScope } from "./tools/generateScope.js";
 import { handleFilterChain } from "./tools/filterChain.js";
 import { handleCdcAnalysis } from "./tools/cdcAnalysis.js";
 import { handleStagingPopulation } from "./tools/stagingPopulation.js";
+import { handleValidateStagingColumns } from "./tools/validateStagingColumns.js";
 
 const environmentParam = z
   .string()
@@ -312,6 +313,19 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
       const build = manager.ensureGraph(environment);
       const schemaPath = manager.getSchemaPath(environment ?? manager.getDefaultEnvironment());
       return json(handleFindBadColumns(build.graph, schemaPath));
+    },
+  );
+
+  server.tool(
+    "graph_validate_staging_columns",
+    "Validate source_query SELECT columns against staging table DDL. Detects column name mismatches that cause ADF auto-mapping failures at runtime. Warns when Copy activities use zero explicit mappings.",
+    {
+      pipeline: z.string().optional().describe("Pipeline name. If omitted, scans all pipelines."),
+      environment: environmentParam,
+    },
+    async ({ pipeline, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleValidateStagingColumns(build.graph, pipeline));
     },
   );
 

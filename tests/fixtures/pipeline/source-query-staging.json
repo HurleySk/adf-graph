@@ -1,0 +1,85 @@
+{
+  "name": "Source_Query_Staging_Test",
+  "properties": {
+    "activities": [
+      {
+        "name": "Load With Mismatch",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Staging",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_query": "SELECT a.Work_Item_id, a.Work_Item_fk, a.FERC_Staff_fk, a.Inactive_Date FROM dbo.Work_Item_FERC_Staff a WITH (NOLOCK)",
+            "dest_object_name": "Work_Item_Staging",
+            "dest_schema_name": "dbo"
+          }
+        }
+      },
+      {
+        "name": "Load With Match",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Staging",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_query": "SELECT a.Work_Item_id, a.Work_Item_fk, a.FERC_Staff_fk, a.Inactive_Date AS Work_Item_Inactive_Date FROM dbo.Work_Item_FERC_Staff a",
+            "dest_object_name": "Work_Item_Staging",
+            "dest_schema_name": "dbo"
+          }
+        }
+      },
+      {
+        "name": "Load Dynamic Skip",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Staging",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_query": {
+              "value": "@pipeline().parameters.dynamic_query",
+              "type": "Expression"
+            },
+            "dest_object_name": "Work_Item_Staging",
+            "dest_schema_name": "dbo"
+          }
+        }
+      },
+      {
+        "name": "Load Expression Wrapped",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Copy_To_Staging",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "source_query": {
+              "value": "SELECT Work_Item_id, Work_Item_fk, Bad_Column FROM dbo.SomeTable",
+              "type": "Expression"
+            },
+            "dest_object_name": {
+              "value": "Work_Item_Staging",
+              "type": "Expression"
+            },
+            "dest_schema_name": "dbo"
+          }
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

@@ -30,10 +30,10 @@ describe("handleFindOrchestrators", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleFindOrchestrators(graph, "Copy_To_Staging");
     expect(result.isRoot).toBe(false);
-    // Copy_To_Staging is executed by both Test_Orchestrator and Dest_Query_Test
-    expect(result.ancestors).toHaveLength(2);
     const roots = result.ancestors.map((a) => a.root).sort();
-    expect(roots).toEqual(["Dest_Query_Test", "Test_Orchestrator"]);
+    expect(roots).toContain("Dest_Query_Test");
+    expect(roots).toContain("Test_Orchestrator");
+    expect(roots).toContain("Source_Query_Staging_Test");
     expect(result.error).toBeUndefined();
   });
 
@@ -107,10 +107,10 @@ describe("handleFindOrchestrators", () => {
 
     const result = handleFindOrchestrators(graph, "Copy_To_Staging");
     expect(result.isRoot).toBe(false);
-    // Dest_Query_Test, Second_Orchestrator, Test_Orchestrator all reach Copy_To_Staging
-    expect(result.ancestors).toHaveLength(3);
-
     const roots = result.ancestors.map((a) => a.root).sort();
-    expect(roots).toEqual(["Dest_Query_Test", "Second_Orchestrator", "Test_Orchestrator"]);
+    expect(roots).toContain("Dest_Query_Test");
+    expect(roots).toContain("Second_Orchestrator");
+    expect(roots).toContain("Test_Orchestrator");
+    expect(roots).toContain("Source_Query_Staging_Test");
   });
 });

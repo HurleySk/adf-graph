@@ -40,7 +40,7 @@ export function stripSqlComments(sql: string): string {
     .join("\n");
 }
 
-function extractSelectClause(sql: string): string | null {
+export function extractSelectClause(sql: string): string | null {
   const upper = sql.toUpperCase();
   const selectIdx = upper.indexOf("SELECT");
   if (selectIdx === -1) return null;
@@ -84,7 +84,7 @@ function extractSelectClause(sql: string): string | null {
   return sql.substring(start).trim();
 }
 
-function splitTopLevelCommas(clause: string): string[] {
+export function splitTopLevelCommas(clause: string): string[] {
   const parts: string[] = [];
   let depth = 0;
   let caseDepth = 0;

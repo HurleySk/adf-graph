@@ -13,12 +13,13 @@ describe("scanSqlDirectory", () => {
     expect(spNodes[0].name).toBe("p_Transform_Org");
   });
 
-  it("discovers tables (1 table: table:dbo.Org_Staging)", () => {
+  it("discovers tables", () => {
     const result = scanSqlDirectory(fixtureDir);
     const tableNodes = result.nodes.filter((n) => n.type === "table");
-    expect(tableNodes).toHaveLength(1);
-    expect(tableNodes[0].id).toBe("table:dbo.Org_Staging");
-    expect(tableNodes[0].name).toBe("Org_Staging");
+    expect(tableNodes).toHaveLength(2);
+    const ids = tableNodes.map((n) => n.id).sort();
+    expect(ids).toContain("table:dbo.Org_Staging");
+    expect(ids).toContain("table:dbo.Work_Item_Staging");
   });
 
   it("returns empty for missing directory", () => {
