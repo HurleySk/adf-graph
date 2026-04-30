@@ -182,6 +182,69 @@ describe("handleValidate", () => {
   });
 });
 
+describe("cross_org_uri_mismatch", () => {
+  it("detects when source and sink datasets point to different Dataverse orgs", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleValidate(graph, "test", "all");
+    const crossOrg = result.issues.filter((i) => i.category === "cross_org_uri_mismatch");
+    expect(crossOrg.length).toBeGreaterThanOrEqual(1);
+    expect(crossOrg[0].severity).toBe("warning");
+    expect(crossOrg[0].message).toContain("almdatadev");
+    expect(crossOrg[0].message).toContain("datadevqa");
+  });
+
+  it("does not flag SQL-to-Dataverse copies", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleValidate(graph, "test", "all");
+    const crossOrg = result.issues.filter((i) => i.category === "cross_org_uri_mismatch");
+    const copyToDv = crossOrg.filter((i) => i.nodeId?.includes("Copy_To_Dataverse"));
+    expect(copyToDv).toHaveLength(0);
+  });
+
+  it("does not flag same-org copies", () => {
+    const graph = new Graph();
+    const lsId = "linked_service:ls_same_org";
+    graph.addNode({ id: "activity:P/Act", type: NodeType.Activity, name: "Act", metadata: {} });
+    graph.addNode({ id: "dataset:ds_in", type: NodeType.Dataset, name: "ds_in", metadata: {} });
+    graph.addNode({ id: "dataset:ds_out", type: NodeType.Dataset, name: "ds_out", metadata: {} });
+    graph.addNode({ id: lsId, type: NodeType.LinkedService, name: "ls_same_org", metadata: {
+      linkedServiceType: "CommonDataServiceForApps",
+      connectionProperties: { serviceUri: "https://org.crm.dynamics.com" },
+    }});
+    graph.addEdge({ from: "activity:P/Act", to: "dataset:ds_in", type: EdgeType.UsesDataset, metadata: { direction: "input" } });
+    graph.addEdge({ from: "activity:P/Act", to: "dataset:ds_out", type: EdgeType.UsesDataset, metadata: { direction: "output" } });
+    graph.addEdge({ from: "dataset:ds_in", to: lsId, type: EdgeType.UsesLinkedService, metadata: {} });
+    graph.addEdge({ from: "dataset:ds_out", to: lsId, type: EdgeType.UsesLinkedService, metadata: {} });
+
+    const result = handleValidate(graph, "test", "all");
+    const crossOrg = result.issues.filter((i) => i.category === "cross_org_uri_mismatch");
+    expect(crossOrg).toHaveLength(0);
+  });
+
+  it("URI comparison is case-insensitive and ignores trailing slashes", () => {
+    const graph = new Graph();
+    graph.addNode({ id: "activity:P/Act", type: NodeType.Activity, name: "Act", metadata: {} });
+    graph.addNode({ id: "dataset:ds_in", type: NodeType.Dataset, name: "ds_in", metadata: {} });
+    graph.addNode({ id: "dataset:ds_out", type: NodeType.Dataset, name: "ds_out", metadata: {} });
+    graph.addNode({ id: "linked_service:ls1", type: NodeType.LinkedService, name: "ls1", metadata: {
+      linkedServiceType: "CommonDataServiceForApps",
+      connectionProperties: { serviceUri: "https://ORG.crm.dynamics.com/" },
+    }});
+    graph.addNode({ id: "linked_service:ls2", type: NodeType.LinkedService, name: "ls2", metadata: {
+      linkedServiceType: "CommonDataServiceForApps",
+      connectionProperties: { serviceUri: "https://org.crm.dynamics.com" },
+    }});
+    graph.addEdge({ from: "activity:P/Act", to: "dataset:ds_in", type: EdgeType.UsesDataset, metadata: { direction: "input" } });
+    graph.addEdge({ from: "activity:P/Act", to: "dataset:ds_out", type: EdgeType.UsesDataset, metadata: { direction: "output" } });
+    graph.addEdge({ from: "dataset:ds_in", to: "linked_service:ls1", type: EdgeType.UsesLinkedService, metadata: {} });
+    graph.addEdge({ from: "dataset:ds_out", to: "linked_service:ls2", type: EdgeType.UsesLinkedService, metadata: {} });
+
+    const result = handleValidate(graph, "test", "all");
+    const crossOrg = result.issues.filter((i) => i.category === "cross_org_uri_mismatch");
+    expect(crossOrg).toHaveLength(0);
+  });
+});
+
 describe("schema validation rules", () => {
   beforeEach(() => { clearEntityDetailCache(); });
 

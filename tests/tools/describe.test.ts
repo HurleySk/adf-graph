@@ -153,4 +153,30 @@ describe("handleDescribePipeline", () => {
     expect(result.error).toBeDefined();
     expect(result.error).toContain("NonExistentPipeline");
   });
+
+  it("full depth: includes sourceConnections and sinkConnections with linked service info", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Copy_To_Dataverse", "full");
+    const upsert = result.activities!.find((a) => a.name === "Upsert Organizations");
+    expect(upsert).toBeDefined();
+
+    expect(upsert!.sinkConnections).toBeDefined();
+    expect(upsert!.sinkConnections!.length).toBeGreaterThanOrEqual(1);
+    const sinkConn = upsert!.sinkConnections![0];
+    expect(sinkConn.linkedServiceName).toBe("ls_dataverse_dev");
+    expect(sinkConn.connectionProperties.serviceUri).toBe("https://almdatadev.crm.dynamics.com");
+  });
+
+  it("full depth: correctly separates input datasets as sources and output datasets as sinks", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Copy_Cross_Org", "full");
+    const copy = result.activities!.find((a) => a.name === "Copy Between Orgs");
+    expect(copy).toBeDefined();
+
+    expect(copy!.sources).toBeDefined();
+    expect(copy!.sources!.some((s) => s.includes("ds_dataverse"))).toBe(true);
+
+    expect(copy!.sinks).toBeDefined();
+    expect(copy!.sinks!.some((s) => s.includes("ds_dataverse_alt"))).toBe(true);
+  });
 });

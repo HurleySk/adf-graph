@@ -109,6 +109,39 @@ describe("handleTraceConnection", () => {
     expect(regionCopy!.activityType).toBe("Copy");
   });
 
+  it("includes role on dataset and linked service steps", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleTraceConnection(graph, "Copy_To_Dataverse");
+    const chain = result.chains.find((c) => c.activityType === "Copy");
+    expect(chain).toBeDefined();
+
+    const sourceDs = chain!.steps.find((s) => s.nodeType === "dataset" && s.name === "ds_sql_staging");
+    expect(sourceDs?.role).toBe("source");
+
+    const sinkDs = chain!.steps.find((s) => s.nodeType === "dataset" && s.name === "ds_dataverse");
+    expect(sinkDs?.role).toBe("sink");
+
+    const sinkLs = chain!.steps.find((s) => s.nodeType === "linked_service" && s.name === "ls_dataverse_dev" && s.role === "sink");
+    expect(sinkLs).toBeDefined();
+  });
+
+  it("traces cross-org pipeline and shows different URIs for source vs sink", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleTraceConnection(graph, "Copy_Cross_Org");
+    expect(result.error).toBeUndefined();
+    expect(result.chains.length).toBeGreaterThan(0);
+
+    const chain = result.chains[0];
+    const sourceLs = chain.steps.find((s) => s.nodeType === "linked_service" && s.role === "source");
+    const sinkLs = chain.steps.find((s) => s.nodeType === "linked_service" && s.role === "sink");
+    expect(sourceLs).toBeDefined();
+    expect(sinkLs).toBeDefined();
+    const srcUri = (sourceLs!.metadata.connectionProperties as Record<string, string>)?.serviceUri;
+    const snkUri = (sinkLs!.metadata.connectionProperties as Record<string, string>)?.serviceUri;
+    expect(srcUri).toContain("almdatadev");
+    expect(snkUri).toContain("datadevqa");
+  });
+
   it("follows ExecutePipeline into child pipelines", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleTraceConnection(graph, "Test_Orchestrator");

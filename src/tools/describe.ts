@@ -6,6 +6,13 @@ import { resolveChildParameters, type ResolvedChildPipeline } from "../utils/par
 
 export type DescribeDepth = "summary" | "activities" | "full" | "resolved";
 
+export interface ConnectionInfo {
+  datasetName: string;
+  linkedServiceName: string;
+  linkedServiceType: string;
+  connectionProperties: Record<string, string>;
+}
+
 export interface ActivityInfo {
   name: string;
   activityType: string;
@@ -13,6 +20,8 @@ export interface ActivityInfo {
   parentActivity?: string;
   sources?: string[];
   sinks?: string[];
+  sourceConnections?: ConnectionInfo[];
+  sinkConnections?: ConnectionInfo[];
   columnMappings?: Array<{ sourceColumn: string | null; sinkColumn: string | null }>;
   sqlQuery?: string;
   fetchXmlQuery?: string;
@@ -136,11 +145,13 @@ export function handleDescribePipeline(
 
       if (effectiveDepth === "full" || effectiveDepth === "resolved") {
         const sources = actOutgoing
-          .filter((e) => e.type === EdgeType.ReadsFrom || (e.type === EdgeType.UsesDataset && e.to.startsWith("dataset:")))
+          .filter((e) => e.type === EdgeType.ReadsFrom ||
+            (e.type === EdgeType.UsesDataset && (e.metadata.direction === "input" || !e.metadata.direction)))
           .map((e) => e.to);
 
         const sinks = actOutgoing
-          .filter((e) => e.type === EdgeType.WritesTo)
+          .filter((e) => e.type === EdgeType.WritesTo ||
+            (e.type === EdgeType.UsesDataset && e.metadata.direction === "output"))
           .map((e) => e.to);
 
         const colMappings = actOutgoing
@@ -153,6 +164,11 @@ export function handleDescribePipeline(
         activityInfo.sources = sources;
         activityInfo.sinks = sinks;
         activityInfo.columnMappings = colMappings;
+
+        const srcConns = resolveConnectionInfo(graph, actOutgoing, "input");
+        const snkConns = resolveConnectionInfo(graph, actOutgoing, "output");
+        if (srcConns.length > 0) activityInfo.sourceConnections = srcConns;
+        if (snkConns.length > 0) activityInfo.sinkConnections = snkConns;
         const meta = getActivityMetadata(activityNode);
         if (meta.sqlQuery) activityInfo.sqlQuery = meta.sqlQuery;
         if (meta.fetchXmlQuery) activityInfo.fetchXmlQuery = meta.fetchXmlQuery;
@@ -191,4 +207,34 @@ export function handleDescribePipeline(
   }
 
   return result;
+}
+
+import type { GraphEdge } from "../graph/model.js";
+
+function resolveConnectionInfo(
+  graph: Graph,
+  actOutgoing: GraphEdge[],
+  direction: "input" | "output",
+): ConnectionInfo[] {
+  const conns: ConnectionInfo[] = [];
+  const dsEdges = actOutgoing.filter(
+    (e) => e.type === EdgeType.UsesDataset && e.metadata.direction === direction,
+  );
+  for (const dsEdge of dsEdges) {
+    const dsNode = graph.getNode(dsEdge.to);
+    if (!dsNode) continue;
+    for (const lsEdge of graph.getOutgoing(dsEdge.to)) {
+      if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
+      const lsNode = graph.getNode(lsEdge.to);
+      if (!lsNode) continue;
+      const cp = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
+      conns.push({
+        datasetName: dsNode.name,
+        linkedServiceName: lsNode.name,
+        linkedServiceType: (lsNode.metadata.linkedServiceType as string) ?? "",
+        connectionProperties: cp ?? {},
+      });
+    }
+  }
+  return conns;
 }

@@ -1,5 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { isStub, getParameterDefs } from "../graph/nodeMetadata.js";
+import { normalizeUri, extractDvOrg } from "../utils/connectionProperties.js";
 
 export interface ValidationIssue {
   severity: "error" | "warning";
@@ -152,6 +153,37 @@ export function handleValidate(
     }
   }
 
+  // ── Cross-org URI mismatch check ────────────────────────────────────────
+
+  for (const node of graph.allNodes()) {
+    if (node.type !== NodeType.Activity) continue;
+    const outgoing = graph.getOutgoing(node.id);
+    const dsEdges = outgoing.filter((e) => e.type === EdgeType.UsesDataset);
+
+    const inputDs = dsEdges.filter((e) => e.metadata.direction === "input");
+    const outputDs = dsEdges.filter((e) => e.metadata.direction === "output");
+    if (inputDs.length === 0 || outputDs.length === 0) continue;
+
+    const sourceUris = resolveLinkedServiceUris(graph, inputDs.map((e) => e.to));
+    const sinkUris = resolveLinkedServiceUris(graph, outputDs.map((e) => e.to));
+    if (sourceUris.length === 0 || sinkUris.length === 0) continue;
+
+    for (const src of sourceUris) {
+      for (const snk of sinkUris) {
+        if (normalizeUri(src.uri) === normalizeUri(snk.uri)) continue;
+        const srcOrg = extractDvOrg(src.uri) ?? src.uri;
+        const snkOrg = extractDvOrg(snk.uri) ?? snk.uri;
+        issues.push({
+          severity: "warning",
+          category: "cross_org_uri_mismatch",
+          message: `Copy activity '${node.name}' reads from '${srcOrg}' (${src.uri}) but writes to '${snkOrg}' (${snk.uri}) — cross-org GUIDs will not match`,
+          nodeId: node.id,
+          relatedNodeId: snk.lsId,
+        });
+      }
+    }
+  }
+
   // ── Dataverse schema validation ─────────────────────────────────────────
   if (schemaPath) {
     const dvEntities = graph.getNodesByType(NodeType.DataverseEntity);
@@ -208,4 +240,28 @@ export function handleValidate(
     issueCount: { errors, warnings },
     issues: filtered,
   };
+}
+
+interface LinkedServiceUri {
+  lsId: string;
+  uri: string;
+}
+
+function resolveLinkedServiceUris(graph: Graph, datasetIds: string[]): LinkedServiceUri[] {
+  const results: LinkedServiceUri[] = [];
+  for (const dsId of datasetIds) {
+    const dsNode = graph.getNode(dsId);
+    if (!dsNode) continue;
+    for (const edge of graph.getOutgoing(dsId)) {
+      if (edge.type !== EdgeType.UsesLinkedService) continue;
+      const lsNode = graph.getNode(edge.to);
+      if (!lsNode) continue;
+      const lsType = lsNode.metadata.linkedServiceType as string | undefined;
+      if (lsType !== "CommonDataServiceForApps") continue;
+      const cp = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
+      const uri = cp?.serviceUri;
+      if (uri) results.push({ lsId: lsNode.id, uri });
+    }
+  }
+  return results;
 }

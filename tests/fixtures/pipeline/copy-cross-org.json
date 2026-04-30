@@ -1,0 +1,39 @@
+{
+  "name": "Copy_Cross_Org",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy Between Orgs",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "CommonDataServiceForAppsSource"
+          },
+          "sink": {
+            "type": "CommonDataServiceForAppsSink",
+            "writeBehavior": "upsert"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_dataverse",
+            "type": "DatasetReference",
+            "parameters": {
+              "entity_name": "alm_organization"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_dataverse_alt",
+            "type": "DatasetReference",
+            "parameters": {
+              "entity_name": "alm_organization"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

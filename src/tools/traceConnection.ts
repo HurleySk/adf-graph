@@ -7,6 +7,7 @@ export interface ConnectionChainStep {
   name: string;
   edgeType: string;
   metadata: Record<string, unknown>;
+  role?: "source" | "sink";
 }
 
 export interface ConnectionChain {
@@ -99,16 +100,20 @@ function walkActivities(
       const dsNode = graph.getNode(dsEdge.to);
       if (!dsNode) continue;
 
+      const dir = dsEdge.metadata.direction as string | undefined;
+      const role = dir === "input" ? "source" as const : dir === "output" ? "sink" as const : undefined;
+
       steps.push({
         nodeType: dsNode.type,
         name: dsNode.name,
         edgeType: dsEdge.type,
         metadata: dsNode.metadata,
+        ...(role ? { role } : {}),
       });
 
       for (const lsEdge of graph.getOutgoing(dsNode.id)) {
         if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
-        appendLinkedServiceChain(graph, lsEdge.to, lsEdge.type, steps);
+        appendLinkedServiceChain(graph, lsEdge.to, lsEdge.type, steps, role);
       }
     }
 
@@ -129,6 +134,7 @@ function appendLinkedServiceChain(
   lsNodeId: string,
   edgeType: string,
   steps: ConnectionChainStep[],
+  role?: "source" | "sink",
 ): void {
   const lsNode = graph.getNode(lsNodeId);
   if (!lsNode) return;
@@ -138,6 +144,7 @@ function appendLinkedServiceChain(
     name: lsNode.name,
     edgeType,
     metadata: lsNode.metadata,
+    ...(role ? { role } : {}),
   });
 
   for (const secEdge of graph.getOutgoing(lsNodeId)) {
@@ -149,6 +156,7 @@ function appendLinkedServiceChain(
       name: secNode.name,
       edgeType: secEdge.type,
       metadata: secNode.metadata,
+      ...(role ? { role } : {}),
     });
   }
 
@@ -161,6 +169,7 @@ function appendLinkedServiceChain(
       name: vaultNode.name,
       edgeType: vaultEdge.type,
       metadata: vaultNode.metadata,
+      ...(role ? { role } : {}),
     });
   }
 }

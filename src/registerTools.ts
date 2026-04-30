@@ -263,7 +263,7 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
 
   server.tool(
     "graph_validate",
-    "Run graph-wide validation: broken references, empty-default parameters without suppliers, unused datasets, orphaned nodes. Returns errors and warnings.",
+    "Run graph-wide validation: broken references, empty-default parameters without suppliers, unused datasets, orphaned nodes, cross-org Dataverse URI mismatches. Returns errors and warnings.",
     {
       environment: environmentParam,
       severity: z.enum(["all", "error", "warning"]).default("all").describe("Filter by severity"),
