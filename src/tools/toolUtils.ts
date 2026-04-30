@@ -174,6 +174,7 @@ export interface TableEdgeInfo {
   hasTruncate: boolean;
   fromNodeType: NodeType;
   fromNodeName: string;
+  activityType: string | null;
 }
 
 export function getTableEdges(graph: Graph, tableName: string): TableEdgeInfo[] {
@@ -201,7 +202,7 @@ export function getTableEdges(graph: Graph, tableName: string): TableEdgeInfo[] 
       pipeline = parsed.pipeline;
       activity = parsed.activity;
     } else {
-      pipeline = `(${fromNode.type})`;
+      pipeline = "(stored procedure)";
       activity = fromNode.name;
     }
 
@@ -215,6 +216,7 @@ export function getTableEdges(graph: Graph, tableName: string): TableEdgeInfo[] 
       hasTruncate,
       fromNodeType: fromNode.type,
       fromNodeName: fromNode.name,
+      activityType: meta?.activityType ?? null,
     });
   }
 

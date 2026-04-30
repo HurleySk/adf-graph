@@ -42,14 +42,12 @@ function findTableUsage(graph: Graph, tableName: string): {
   const consumedBy: Array<{ pipeline: string; activity: string; context: string }> = [];
 
   for (const e of edges) {
+    const isSp = e.fromNodeType === NodeType.StoredProcedure || e.activityType === "SqlServerStoredProcedure";
     if (e.edgeType === EdgeType.WritesTo) {
-      const mechanism = e.hasTruncate
-        ? "truncate_insert"
-        : e.fromNodeType === NodeType.StoredProcedure ? "stored_procedure" : "copy";
+      const mechanism = e.hasTruncate ? "truncate_insert" : isSp ? "stored_procedure" : "copy";
       populatedBy.push({ pipeline: e.pipeline, activity: e.activity, mechanism });
     } else if (e.edgeType === EdgeType.ReadsFrom) {
-      const context = e.fromNodeType === NodeType.StoredProcedure ? "sp_read" : "source_query";
-      consumedBy.push({ pipeline: e.pipeline, activity: e.activity, context });
+      consumedBy.push({ pipeline: e.pipeline, activity: e.activity, context: isSp ? "sp_read" : "source_query" });
     }
   }
 
