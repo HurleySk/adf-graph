@@ -35,6 +35,7 @@ import { handleFilterChain } from "./tools/filterChain.js";
 import { handleCdcAnalysis } from "./tools/cdcAnalysis.js";
 import { handleStagingPopulation } from "./tools/stagingPopulation.js";
 import { handleValidateStagingColumns } from "./tools/validateStagingColumns.js";
+import { handleExport } from "./tools/export.js";
 
 const environmentParam = z
   .string()
@@ -62,6 +63,17 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
       const envName = environment ?? manager.getDefaultEnvironment();
       const envInfo = manager.listEnvironments().find((e) => e.name === envName);
       return json(handleStats(build.graph, envInfo?.lastBuild ?? null, envInfo?.isStale ?? true, build.warnings));
+    },
+  );
+
+  server.tool(
+    "graph_export",
+    "Export the full graph (all nodes and edges) as a single JSON payload. Designed for visualization tools that need the complete topology.",
+    { environment: environmentParam },
+    async ({ environment }) => {
+      const build = manager.ensureGraph(environment);
+      const envName = environment ?? manager.getDefaultEnvironment();
+      return json(handleExport(build.graph, envName));
     },
   );
 
