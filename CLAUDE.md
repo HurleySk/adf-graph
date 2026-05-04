@@ -12,12 +12,12 @@ MCP server that builds a queryable dependency graph from ADF pipeline artifacts.
 
 - `src/config.ts` — Config loader (ADF_CONFIG / adf-graph.json / ADF_ROOT fallback)
 - `src/graph/model.ts` — Graph data structure (nodes, edges, adjacency lists)
-- `src/graph/builder.ts` — 5-pass graph builder (pipelines → datasets → linked services → SQL/SP → Dataverse schema → stubs)
+- `src/graph/builder.ts` — 8-pass graph builder (pipelines → datasets → linked services → triggers → IRs → LS→IR edges → SQL/SP → Dataverse schema → stubs)
 - `src/graph/staleness.ts` — File mtime tracking, rebuild-if-stale (multi-path aware)
 - `src/graph/overlay.ts` — Artifact type detection, overlay scanning (structured + loose), graph merge
 - `src/graph/manager.ts` — Multi-environment graph manager (lazy build, per-env staleness, schema staleness, overlay merge views)
-- `src/parsers/` — One parser per artifact type (pipeline, dataset, sql, columns, dataverseSchema)
-- `src/tools/` — One file per MCP tool (describe, describeEntity, lineage, search, diff, impact, consumers, paths, stats, validate, deployReadiness, overlay/env management)
+- `src/parsers/` — One parser per artifact type (pipeline, dataset, sql, columns, dataverseSchema, trigger, integrationRuntime)
+- `src/tools/` — One file per MCP tool (describe, describeEntity, describeStoredProcedure, describeTable, describeTrigger, describeIntegrationRuntime, environmentConfig, spBody, lineage, search, diff, impact, consumers, paths, stats, validate, deployReadiness, overlay/env management)
 - `src/server.ts` — MCP server entry point, tool registration
 
 ## Configuration

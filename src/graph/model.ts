@@ -8,6 +8,8 @@ export enum NodeType {
   DataverseAttribute = "dataverse_attribute",
   LinkedService = "linked_service",
   KeyVaultSecret = "key_vault_secret",
+  Trigger = "trigger",
+  IntegrationRuntime = "integration_runtime",
 }
 
 export enum EdgeType {
@@ -22,6 +24,8 @@ export enum EdgeType {
   MapsColumn = "maps_column",
   ReferencesSecret = "references_secret",
   HasAttribute = "has_attribute",
+  Triggers = "triggers",
+  UsesIntegrationRuntime = "uses_ir",
 }
 
 export interface GraphNode {

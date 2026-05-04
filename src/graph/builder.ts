@@ -2,7 +2,7 @@ import { readdirSync, statSync, existsSync, readFileSync } from "fs";
 import { join, extname, basename } from "path";
 import { Graph, GraphNode, GraphEdge, NodeType, EdgeType } from "./model.js";
 import { ADF_DIRS } from "../constants.js";
-import { inferNodeType, parseNodeId, makeNodeId, makeActivityId } from "../utils/nodeId.js";
+import { inferNodeType, parseNodeId, makeNodeId, makeActivityId, makeIntegrationRuntimeId } from "../utils/nodeId.js";
 import { ParseResult, parsePipelineFile } from "../parsers/pipeline.js";
 import { extractColumnMappings } from "../parsers/columns.js";
 import { CONTAINER_TYPES } from "../parsers/activities/container.js";
@@ -11,6 +11,8 @@ import { parseLinkedServiceFile } from "../parsers/linkedService.js";
 import { scanSqlDirectory } from "../parsers/sql.js";
 import { parseSpBody } from "../parsers/spColumnParser.js";
 import { parseSchemaIndex } from "../parsers/dataverseSchema.js";
+import { parseTriggerFile } from "../parsers/trigger.js";
+import { parseIntegrationRuntimeFile } from "../parsers/integrationRuntime.js";
 
 export interface BuildResult {
   graph: Graph;
@@ -141,23 +143,40 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
   // ── Pass 3: Linked Services ───────────────────────────────────────────────
   processJsonDirectory(rootPath, ADF_DIRS.LINKED_SERVICE, parseLinkedServiceFile, graph, warnings);
 
+  // ── Pass 3b: Triggers ─────────────────────────────────────────────────────
+  processJsonDirectory(rootPath, ADF_DIRS.TRIGGER, parseTriggerFile, graph, warnings);
+
+  // ── Pass 3c: Integration Runtimes ─────────────────────────────────────────
+  processJsonDirectory(rootPath, ADF_DIRS.INTEGRATION_RUNTIME, parseIntegrationRuntimeFile, graph, warnings);
+
+  // ── Pass 3d: LS → IR edges ────────────────────────────────────────────────
+  for (const lsNode of graph.getNodesByType(NodeType.LinkedService)) {
+    const connProps = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
+    const irName = connProps?.connectVia;
+    if (irName) {
+      const irId = makeIntegrationRuntimeId(irName);
+      graph.addEdge({
+        from: lsNode.id,
+        to: irId,
+        type: EdgeType.UsesIntegrationRuntime,
+        metadata: {},
+      });
+    }
+  }
+
   // ── Pass 4: SQL ───────────────────────────────────────────────────────────
   const sqlBaseDir = join(rootPath, ADF_DIRS.SQL);
+  let sqlProjects: string[] = [];
   if (existsSync(sqlBaseDir)) {
-    let projects: string[] = [];
     try {
-      projects = readdirSync(sqlBaseDir);
+      sqlProjects = readdirSync(sqlBaseDir).filter(entry => {
+        try { return statSync(join(sqlBaseDir, entry)).isDirectory(); } catch { return false; }
+      });
     } catch (err) {
       warnings.push(`Failed to read SQL DB dir: ${String(err)}`);
     }
-    for (const project of projects) {
+    for (const project of sqlProjects) {
       const projectPath = join(sqlBaseDir, project);
-      try {
-        const stat = statSync(projectPath);
-        if (!stat.isDirectory()) continue;
-      } catch {
-        continue;
-      }
       try {
         const result = scanSqlDirectory(projectPath);
         warnings.push(...result.warnings);
@@ -168,7 +187,48 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
     }
   }
 
-  // ── Pass 4b: SP column-level mappings ──────────────────────────────────────
+  // ── Pass 4b: SQL _index.json enrichment ────────────────────────────────────
+  if (existsSync(sqlBaseDir)) {
+    for (const project of sqlProjects) {
+      const projectPath = join(sqlBaseDir, project);
+      const indexPath = join(projectPath, "_index.json");
+      if (!existsSync(indexPath)) continue;
+      try {
+        const indexData = JSON.parse(readFileSync(indexPath, "utf-8")) as Record<string, unknown>;
+        const tables = indexData.tables as Array<Record<string, unknown>> | undefined;
+        if (tables) {
+          for (const tbl of tables) {
+            const tblName = tbl.name as string;
+            if (!tblName) continue;
+            const tableId = makeNodeId(NodeType.Table, `dbo.${tblName}`);
+            const tableNode = graph.getNode(tableId);
+            if (tableNode) {
+              tableNode.metadata.columns = tbl.columns ?? [];
+              tableNode.metadata.columnCount = tbl.columnCount ?? (tbl.columns as unknown[] | undefined)?.length ?? 0;
+              graph.replaceNode(tableNode);
+            }
+          }
+        }
+        const storedProcedures = indexData.storedProcedures as Array<Record<string, unknown>> | undefined;
+        if (storedProcedures) {
+          for (const sp of storedProcedures) {
+            const spName = sp.name as string;
+            if (!spName) continue;
+            const spId = makeNodeId(NodeType.StoredProcedure, `dbo.${spName}`);
+            const spNode = graph.getNode(spId);
+            if (spNode) {
+              spNode.metadata.parameters = sp.parameters ?? [];
+              graph.replaceNode(spNode);
+            }
+          }
+        }
+      } catch (err) {
+        warnings.push(`Failed to read SQL _index.json in '${project}': ${String(err)}`);
+      }
+    }
+  }
+
+  // ── Pass 4c: SP column-level mappings ─────────────────────────────────────
   const spNodes = graph.getNodesByType(NodeType.StoredProcedure);
   for (const spNode of spNodes) {
     const filePath = spNode.metadata.filePath as string | undefined;

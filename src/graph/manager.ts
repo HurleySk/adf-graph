@@ -114,6 +114,11 @@ export class GraphManager {
     return this.resolveSchemaPath(envName);
   }
 
+  /** Return the root filesystem path for an environment. */
+  getEnvironmentPath(envName: string): string {
+    return this.resolveEnvPath(envName) ?? "";
+  }
+
   /** List all environments with stats (graph built lazily — unbuilt envs show null counts). */
   listEnvironments(): EnvironmentInfo[] {
     const result: EnvironmentInfo[] = [];

@@ -36,6 +36,12 @@ import { handleCdcAnalysis } from "./tools/cdcAnalysis.js";
 import { handleStagingPopulation } from "./tools/stagingPopulation.js";
 import { handleValidateStagingColumns } from "./tools/validateStagingColumns.js";
 import { handleExport } from "./tools/export.js";
+import { handleDescribeStoredProcedure } from "./tools/describeStoredProcedure.js";
+import { handleDescribeTable } from "./tools/describeTable.js";
+import { handleDescribeTrigger } from "./tools/describeTrigger.js";
+import { handleDescribeIntegrationRuntime } from "./tools/describeIntegrationRuntime.js";
+import { handleEnvironmentConfig } from "./tools/environmentConfig.js";
+import { handleSpBody } from "./tools/spBody.js";
 
 const environmentParam = z
   .string()
@@ -45,6 +51,7 @@ const environmentParam = z
 const nodeTypeEnum = z.enum([
   "pipeline", "activity", "dataset", "stored_procedure", "table",
   "dataverse_entity", "dataverse_attribute", "linked_service", "key_vault_secret",
+  "trigger", "integration_runtime",
 ]);
 
 function json(result: unknown) {
@@ -543,6 +550,92 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     async ({ pipeline, environment }) => {
       const build = manager.ensureGraph(environment);
       return json(handleStagingPopulation(build.graph, pipeline));
+    },
+  );
+
+  // ── Fact-query tools ───────────────────────────────────────────────────
+
+  server.tool(
+    "graph_describe_stored_procedure",
+    "Return structured facts about a stored procedure: parameters, tables read/written, callers, confidence, and column mappings. Avoids reading .sql files directly.",
+    {
+      name: z.string().describe("Stored procedure name (e.g. 'p_Agenda_Commission_Meeting_Staging_Transform' or 'dbo.p_Agenda_Commission_Meeting_Staging_Transform')"),
+      depth: z.enum(["summary", "full"]).default("summary").describe("'summary' = params, tables, callers; 'full' = adds column mappings and SQL body"),
+      environment: environmentParam,
+    },
+    async ({ name, depth, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleDescribeStoredProcedure(build.graph, name, depth));
+    },
+  );
+
+  server.tool(
+    "graph_describe_table",
+    "Return a table's column schema (names, types, nullable) and its pipeline/SP consumers. Avoids reading DDL files directly.",
+    {
+      table: z.string().describe("Table name (e.g. 'Agenda_Commission_Meeting_Staging' or 'dbo.Agenda_Commission_Meeting_Staging')"),
+      environment: environmentParam,
+    },
+    async ({ table, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleDescribeTable(build.graph, table));
+    },
+  );
+
+  server.tool(
+    "graph_describe_trigger",
+    "Return trigger schedules, associated pipelines, and runtime state. If no trigger name is given, lists all triggers.",
+    {
+      trigger: z.string().optional().describe("Trigger name. If omitted, lists all triggers."),
+      pipeline: z.string().optional().describe("Filter to triggers that fire this pipeline."),
+      environment: environmentParam,
+    },
+    async ({ trigger, pipeline, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleDescribeTrigger(build.graph, trigger, pipeline));
+    },
+  );
+
+  server.tool(
+    "graph_describe_integration_runtime",
+    "Return integration runtime type, compute config, and which linked services use it. If no IR name is given, lists all IRs.",
+    {
+      ir: z.string().optional().describe("Integration runtime name. If omitted, lists all IRs."),
+      environment: environmentParam,
+    },
+    async ({ ir, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleDescribeIntegrationRuntime(build.graph, ir));
+    },
+  );
+
+  server.tool(
+    "graph_environment_config",
+    "Return linked service endpoint configuration for a deployment target (e.g. 'uat', 'prod'). Resolves from config files or inline LS definitions relative to the environment path.",
+    {
+      target: z.string().describe("Deployment target name (e.g. 'uat', 'preprod', 'prod')"),
+      linked_service: z.string().optional().describe("Filter to a specific linked service name"),
+      environment: environmentParam,
+    },
+    async ({ target, linked_service, environment }) => {
+      const build = manager.ensureGraph(environment);
+      const envName = environment ?? manager.getDefaultEnvironment();
+      const envPath = manager.getEnvironmentPath(envName);
+      return json(handleEnvironmentConfig(build.graph, target, linked_service, envPath));
+    },
+  );
+
+  server.tool(
+    "graph_sp_body",
+    "Return the full SQL body of a stored procedure. Use this when you need the actual SQL content, not just metadata.",
+    {
+      name: z.string().describe("Stored procedure name (e.g. 'p_ADF_Batch_Processing' or 'dbo.p_ADF_Batch_Processing')"),
+      schema: z.string().default("dbo").describe("Schema name (default 'dbo')"),
+      environment: environmentParam,
+    },
+    async ({ name, schema, environment }) => {
+      const build = manager.ensureGraph(environment);
+      return json(handleSpBody(build.graph, name, schema));
     },
   );
 }

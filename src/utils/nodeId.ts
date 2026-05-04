@@ -36,6 +36,14 @@ export function makeKeyVaultSecretId(name: string): string {
   return makeNodeId(NodeType.KeyVaultSecret, name);
 }
 
+export function makeTriggerId(name: string): string {
+  return makeNodeId(NodeType.Trigger, name);
+}
+
+export function makeIntegrationRuntimeId(name: string): string {
+  return makeNodeId(NodeType.IntegrationRuntime, name);
+}
+
 export function makeAttributeId(entityName: string, attributeName: string): string {
   return makeNodeId(NodeType.DataverseAttribute, `${entityName}.${attributeName}`);
 }
@@ -66,6 +74,8 @@ export function inferNodeType(id: string): NodeType | null {
     case "dataverse_attribute": return NodeType.DataverseAttribute;
     case "linked_service": return NodeType.LinkedService;
     case "key_vault_secret": return NodeType.KeyVaultSecret;
+    case "trigger": return NodeType.Trigger;
+    case "integration_runtime": return NodeType.IntegrationRuntime;
     default: return null;
   }
 }
