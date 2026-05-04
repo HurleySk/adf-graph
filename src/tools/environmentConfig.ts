@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join, extname } from "path";
-import { Graph, NodeType } from "../graph/model.js";
 
 interface LinkedServiceEndpoint {
   name: string;
@@ -22,7 +21,6 @@ export interface EnvironmentConfigResult {
 const endpointConfigCache = new Map<string, EnvironmentConfigResult>();
 
 export function handleEnvironmentConfig(
-  graph: Graph,
   target: string,
   linkedService: string | undefined,
   envPath: string,

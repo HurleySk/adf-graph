@@ -618,10 +618,10 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
       environment: environmentParam,
     },
     async ({ target, linked_service, environment }) => {
-      const build = manager.ensureGraph(environment);
+      manager.ensureGraph(environment);
       const envName = environment ?? manager.getDefaultEnvironment();
       const envPath = manager.getEnvironmentPath(envName);
-      return json(handleEnvironmentConfig(build.graph, target, linked_service, envPath));
+      return json(handleEnvironmentConfig(target, linked_service, envPath));
     },
   );
 

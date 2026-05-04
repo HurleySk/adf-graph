@@ -3,6 +3,7 @@ import { join } from "path";
 import { AdfGraphConfig, EnvironmentConfig } from "../config.js";
 import { OVERLAY_SUFFIX } from "../constants.js";
 import { clearEntityDetailCache } from "../parsers/dataverseSchema.js";
+import { clearEnvironmentConfigCache } from "../tools/environmentConfig.js";
 import { buildGraph } from "./builder.js";
 import { Graph } from "./model.js";
 import { scanOverlayPath, mergeOverlayInto } from "./overlay.js";
@@ -85,6 +86,7 @@ export class GraphManager {
     staleness.markBuilt();
     this.markSchemaBuilt(envName, schemaPath);
     clearEntityDetailCache();
+    clearEnvironmentConfigCache();
 
     const state: EnvState = {
       graph: result.graph,
