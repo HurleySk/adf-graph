@@ -19,5 +19,9 @@ const server = new McpServer({
 
 registerTools(server, manager);
 
+process.stdin.on("end", () => process.exit(0));
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT", () => process.exit(0));
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
