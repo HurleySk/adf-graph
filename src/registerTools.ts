@@ -42,6 +42,13 @@ import { handleDescribeTrigger } from "./tools/describeTrigger.js";
 import { handleDescribeIntegrationRuntime } from "./tools/describeIntegrationRuntime.js";
 import { handleEnvironmentConfig } from "./tools/environmentConfig.js";
 import { handleSpBody } from "./tools/spBody.js";
+import { buildBoomerangEnrich } from "./utils/boomerangRef.js";
+
+function withSeeAlso(result: unknown, names: string[], environment: string): unknown {
+  if (names.length === 0) return result;
+  const envName = environment || "default";
+  return { ...(result as Record<string, unknown>), see_also: [buildBoomerangEnrich(names, envName)] };
+}
 
 const environmentParam = z
   .string()
@@ -109,7 +116,9 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ pipeline, depth, activity, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleDescribePipeline(build.graph, pipeline, depth, activity));
+      const result = handleDescribePipeline(build.graph, pipeline, depth, activity);
+      const spNames = (result.activities ?? []).map((a) => a.storedProcedureName).filter(Boolean) as string[];
+      return json(withSeeAlso(result, spNames, environment ?? manager.getDefaultEnvironment()));
     },
   );
 
@@ -124,7 +133,8 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     async ({ entity, depth, environment }) => {
       const build = manager.ensureGraph(environment);
       const schemaPath = manager.getSchemaPath(environment ?? manager.getDefaultEnvironment());
-      return json(handleDescribeEntity(build.graph, entity, depth, schemaPath));
+      const result = handleDescribeEntity(build.graph, entity, depth, schemaPath);
+      return json(withSeeAlso(result, [entity], environment ?? manager.getDefaultEnvironment()));
     },
   );
 
@@ -139,7 +149,11 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ target, target_type, direction, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleImpactAnalysis(build.graph, target, target_type, direction));
+      const result = handleImpactAnalysis(build.graph, target, target_type, direction);
+      const names = (result.affected ?? [])
+        .filter((a) => ["stored_procedure", "table", "dataverse_entity"].includes(a.nodeType))
+        .map((a) => a.name);
+      return json(withSeeAlso(result, names, environment ?? manager.getDefaultEnvironment()));
     },
   );
 
@@ -159,7 +173,16 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ entity, attribute, direction, maxDepth, detail, nodeTypes, limit, offset, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleDataLineage(build.graph, entity, { attribute, direction, maxDepth, detail, nodeTypes, limit, offset }));
+      const result = handleDataLineage(build.graph, entity, { attribute, direction, maxDepth, detail, nodeTypes, limit, offset });
+      const names = new Set<string>();
+      if ("paths" in result) {
+        for (const p of result.paths) {
+          for (const s of p.steps) {
+            if (["stored_procedure", "table", "dataverse_entity"].includes(s.nodeType)) names.add(s.name);
+          }
+        }
+      }
+      return json(withSeeAlso(result, [...names], environment ?? manager.getDefaultEnvironment()));
     },
   );
 
@@ -220,7 +243,8 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ pipeline, activity, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleTraceConnection(build.graph, pipeline, activity));
+      const result = handleTraceConnection(build.graph, pipeline, activity);
+      return json(withSeeAlso(result, [pipeline], environment ?? manager.getDefaultEnvironment()));
     },
   );
 
@@ -384,7 +408,8 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ entity, detail, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleEntityCoverage(build.graph, entity, detail));
+      const result = handleEntityCoverage(build.graph, entity, detail);
+      return json(withSeeAlso(result, [entity], environment ?? manager.getDefaultEnvironment()));
     },
   );
 
@@ -565,7 +590,10 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ name, depth, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleDescribeStoredProcedure(build.graph, name, depth));
+      const result = handleDescribeStoredProcedure(build.graph, name, depth);
+      const names = [...(result.readTables ?? []), ...(result.writeTables ?? [])];
+      if (!result.error) names.push(name);
+      return json(withSeeAlso(result, names, environment ?? manager.getDefaultEnvironment()));
     },
   );
 
@@ -578,7 +606,10 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
     },
     async ({ table, environment }) => {
       const build = manager.ensureGraph(environment);
-      return json(handleDescribeTable(build.graph, table));
+      const result = handleDescribeTable(build.graph, table);
+      const names = (result.storedProcedureConsumers ?? []).map((c) => c.spName);
+      if (!result.error) names.push(table);
+      return json(withSeeAlso(result, names, environment ?? manager.getDefaultEnvironment()));
     },
   );
 
