@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { join } from "path";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "fs";
 import { StalenessChecker } from "../../src/graph/staleness.js";
@@ -34,7 +34,8 @@ describe("StalenessChecker", () => {
     mkdirSync(pipelineDir, { recursive: true });
     writeFileSync(join(pipelineDir, "existing.json"), "{}");
 
-    const checker = new StalenessChecker(tmpDir);
+    // Use cooldownMs=0 so every isStale() does a full walk
+    const checker = new StalenessChecker(tmpDir, 0);
     checker.markBuilt();
     expect(checker.isStale()).toBe(false);
 
@@ -82,7 +83,8 @@ describe("StalenessChecker", () => {
       mkdirSync(join(dir2, "pipeline"), { recursive: true });
       writeFileSync(join(dir1, "pipeline", "a.json"), "{}");
 
-      const checker = new StalenessChecker([dir1, dir2]);
+      // Use cooldownMs=0 so every isStale() does a full walk
+      const checker = new StalenessChecker([dir1, dir2], 0);
       checker.markBuilt();
       expect(checker.isStale()).toBe(false);
 
@@ -122,6 +124,114 @@ describe("StalenessChecker", () => {
       checker.markBuilt();
       expect(checker.isStale()).toBe(false);
 
+      checker.removePath(dir2);
+      expect(checker.isStale()).toBe(true);
+    });
+  });
+
+  describe("cooldown", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("second isStale() within cooldown returns cached result without re-walking", () => {
+      const pipelineDir = join(tmpDir, "pipeline");
+      mkdirSync(pipelineDir, { recursive: true });
+      writeFileSync(join(pipelineDir, "a.json"), "{}");
+
+      // Use a long cooldown so the second call is definitely within the window
+      const checker = new StalenessChecker(tmpDir, 60_000);
+      checker.markBuilt();
+
+      // Spy on the private currentMaxMtime via the prototype
+      const spy = vi.spyOn(
+        StalenessChecker.prototype as any,
+        "currentMaxMtime"
+      );
+
+      // First call: should perform a full walk
+      expect(checker.isStale()).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Second call: should return cached result, no additional walk
+      expect(checker.isStale()).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it("isStale() re-evaluates after cooldown expires", async () => {
+      const pipelineDir = join(tmpDir, "pipeline");
+      mkdirSync(pipelineDir, { recursive: true });
+      writeFileSync(join(pipelineDir, "a.json"), "{}");
+
+      // Use a very short cooldown (50ms)
+      const checker = new StalenessChecker(tmpDir, 50);
+      checker.markBuilt();
+
+      const spy = vi.spyOn(
+        StalenessChecker.prototype as any,
+        "currentMaxMtime"
+      );
+
+      // First call: full walk
+      expect(checker.isStale()).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Wait for cooldown to expire
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      // Second call after cooldown: should re-walk
+      expect(checker.isStale()).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
+    it("markBuilt() resets cooldown so next isStale() re-walks", () => {
+      const pipelineDir = join(tmpDir, "pipeline");
+      mkdirSync(pipelineDir, { recursive: true });
+      writeFileSync(join(pipelineDir, "a.json"), "{}");
+
+      const checker = new StalenessChecker(tmpDir, 60_000);
+      checker.markBuilt();
+
+      const spy = vi.spyOn(
+        StalenessChecker.prototype as any,
+        "currentMaxMtime"
+      );
+
+      // First isStale: full walk
+      expect(checker.isStale()).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // markBuilt resets cooldown (also calls currentMaxMtime internally)
+      checker.markBuilt();
+      expect(spy).toHaveBeenCalledTimes(2);
+
+      // Next isStale after markBuilt: should do a full walk again, not use cache
+      expect(checker.isStale()).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(3);
+    });
+
+    it("addPath/removePath (invalidate) resets cooldown so next isStale() re-evaluates", () => {
+      const dir1 = join(tmpDir, "root1");
+      const dir2 = join(tmpDir, "root2");
+      mkdirSync(join(dir1, "pipeline"), { recursive: true });
+      mkdirSync(join(dir2, "pipeline"), { recursive: true });
+
+      const checker = new StalenessChecker(dir1, 60_000);
+      checker.markBuilt();
+
+      // isStale: not stale, sets cooldown
+      expect(checker.isStale()).toBe(false);
+
+      // addPath invalidates — builtAt becomes null, so isStale returns true
+      // without even reaching the cooldown check
+      checker.addPath(dir2);
+      expect(checker.isStale()).toBe(true);
+
+      // Rebuild and verify fresh state
+      checker.markBuilt();
+      expect(checker.isStale()).toBe(false);
+
+      // removePath also invalidates
       checker.removePath(dir2);
       expect(checker.isStale()).toBe(true);
     });

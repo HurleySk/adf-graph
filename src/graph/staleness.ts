@@ -50,9 +50,16 @@ export class StalenessChecker {
   private builtAt: number | null = null;
   /** Max file mtime (ms) observed at the time of the last markBuilt() call. */
   private builtMaxMtime: number | null = null;
+  /** Wall-clock timestamp (ms since epoch) when isStale() last performed a full check. */
+  private lastCheckTime: number | null = null;
+  /** Cached result of the last full staleness check. */
+  private lastCheckResult: boolean = true;
+  /** Minimum interval (ms) between full directory walks in isStale(). */
+  private cooldownMs: number;
 
-  constructor(rootPath: string | string[]) {
+  constructor(rootPath: string | string[], cooldownMs: number = 5000) {
     this.rootPaths = Array.isArray(rootPath) ? [...rootPath] : [rootPath];
+    this.cooldownMs = cooldownMs;
   }
 
   /**
@@ -67,8 +74,15 @@ export class StalenessChecker {
     if (this.rootPaths.length === 0) return true;
     if (!this.rootPaths.some((p) => existsSync(p))) return true;
 
+    // Cooldown: skip re-walk if checked recently and result was fresh
+    if (this.lastCheckTime !== null && (Date.now() - this.lastCheckTime) < this.cooldownMs) {
+      return this.lastCheckResult;
+    }
+
     const currentMax = this.currentMaxMtime();
-    return currentMax > this.builtMaxMtime;
+    this.lastCheckTime = Date.now();
+    this.lastCheckResult = currentMax > this.builtMaxMtime;
+    return this.lastCheckResult;
   }
 
   /**
@@ -78,6 +92,7 @@ export class StalenessChecker {
   markBuilt(): void {
     this.builtMaxMtime = this.currentMaxMtime();
     this.builtAt = Date.now();
+    this.lastCheckTime = null;
   }
 
   /**
@@ -115,6 +130,7 @@ export class StalenessChecker {
   private invalidate(): void {
     this.builtAt = null;
     this.builtMaxMtime = null;
+    this.lastCheckTime = null;
   }
 
   private currentMaxMtime(): number {
