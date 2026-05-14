@@ -87,4 +87,23 @@ describe("parseSqlParameter", () => {
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(result.warnings[0]).toContain("SELECT *");
   });
+
+  it("warns on dest_query columns without explicit alias", () => {
+    const sql = "SELECT a.staging_id, a.Name AS pcx_name FROM dbo.Staging a";
+    const result = parseSqlParameter("dest_query", sql);
+
+    expect(result.columns).toHaveLength(2);
+    const aliasWarnings = result.warnings.filter((w) => w.includes("no explicit alias"));
+    expect(aliasWarnings).toHaveLength(1);
+    expect(aliasWarnings[0]).toContain("staging_id");
+  });
+
+  it("does not warn on source_query columns without alias", () => {
+    const sql = "SELECT a.staging_id, a.Name FROM dbo.Staging a";
+    const result = parseSqlParameter("source_query", sql);
+
+    expect(result.columns).toHaveLength(2);
+    const aliasWarnings = result.warnings.filter((w) => w.includes("no explicit alias"));
+    expect(aliasWarnings).toHaveLength(0);
+  });
 });

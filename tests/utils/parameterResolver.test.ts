@@ -88,5 +88,9 @@ describe("resolveChildParameters", () => {
     const result = resolveChildParameters(graph, actNode!);
     expect(result).not.toBeNull();
     expect(result!.cdcInfo).toBeNull();
+    // source_query is supplied with concrete SQL, so it gets parsed
+    expect(result!.parsedQueries).toHaveLength(1);
+    expect(result!.parsedQueries[0].parameterName).toBe("source_query");
+    expect(result!.parsedQueries[0].isCdcDependent).toBe(false);
   });
 });

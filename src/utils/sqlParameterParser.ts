@@ -13,6 +13,7 @@ export interface ParsedSqlParameter {
   warnings: string[];
 }
 
+// Only these contain full SELECT statements; pre_copy_script/cdc_source_table_query are not parseable queries
 const SQL_PARAMETER_NAMES = new Set(["source_query", "dest_query"]);
 
 export function isSqlParameter(name: string): boolean {
@@ -47,6 +48,16 @@ export function parseSqlParameter(parameterName: string, sql: string): ParsedSql
     }
   }
 
+  const warnings = [...columnResult.warnings];
+
+  if (parameterName === "dest_query") {
+    for (const col of columnResult.columns) {
+      if (!col.hasExplicitAlias) {
+        warnings.push(`dest_query column '${col.effectiveName}' has no explicit alias — Dataverse mapping may fail`);
+      }
+    }
+  }
+
   return {
     parameterName,
     sql,
@@ -55,6 +66,6 @@ export function parseSqlParameter(parameterName: string, sql: string): ParsedSql
     whereClause,
     isCdcDependent,
     cdcDependencyTable,
-    warnings: columnResult.warnings,
+    warnings,
   };
 }
