@@ -154,6 +154,61 @@ describe("handleDescribePipeline", () => {
     expect(result.error).toContain("NonExistentPipeline");
   });
 
+  it("resolved depth: parses source_query into columns and tables", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "DeltaLoad_Orchestrator", "resolved");
+    const loadWI = result.activities!.find((a) => a.name === "Load Work Items");
+    expect(loadWI).toBeDefined();
+    expect(loadWI!.resolvedChild).toBeDefined();
+    expect(loadWI!.resolvedChild!.parsedQueries).toBeDefined();
+
+    const srcQ = loadWI!.resolvedChild!.parsedQueries.find((q) => q.parameterName === "source_query");
+    expect(srcQ).toBeDefined();
+    expect(srcQ!.columns.map((c) => c.effectiveName)).toContain("Work_Item_id");
+    expect(srcQ!.columns.map((c) => c.effectiveName)).toContain("Work_Item_Name");
+    expect(srcQ!.tables.some((t) => t.table === "dbo.Work_Item" && t.depth === 0)).toBe(true);
+  });
+
+  it("resolved depth: flags dest_query as CDC-dependent", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "DeltaLoad_Orchestrator", "resolved");
+    const loadWI = result.activities!.find((a) => a.name === "Load Work Items");
+    const destQ = loadWI!.resolvedChild!.parsedQueries.find((q) => q.parameterName === "dest_query");
+    expect(destQ).toBeDefined();
+    expect(destQ!.isCdcDependent).toBe(true);
+    expect(destQ!.cdcDependencyTable).toContain("CDC_Work_Item_Current");
+  });
+
+  it("resolved depth: non-CDC dest_query is not flagged", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "DeltaLoad_Orchestrator", "resolved");
+    const loadWS = result.activities!.find((a) => a.name === "Load Work Sets");
+    expect(loadWS!.resolvedChild).toBeDefined();
+    const destQ = loadWS!.resolvedChild!.parsedQueries.find((q) => q.parameterName === "dest_query");
+    expect(destQ).toBeDefined();
+    expect(destQ!.isCdcDependent).toBe(false);
+    expect(destQ!.cdcDependencyTable).toBeUndefined();
+  });
+
+  it("resolved depth: skips dynamic expression source_query", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Source_Query_Staging_Test", "resolved");
+    const loadDynamic = result.activities!.find((a) => a.name === "Load Dynamic Skip");
+    expect(loadDynamic!.resolvedChild).toBeDefined();
+    const srcQ = loadDynamic!.resolvedChild!.parsedQueries.find((q) => q.parameterName === "source_query");
+    expect(srcQ).toBeUndefined();
+  });
+
+  it("resolved depth: parses Expression-wrapped concrete SQL", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Source_Query_Staging_Test", "resolved");
+    const loadExpr = result.activities!.find((a) => a.name === "Load Expression Wrapped");
+    expect(loadExpr!.resolvedChild).toBeDefined();
+    const srcQ = loadExpr!.resolvedChild!.parsedQueries.find((q) => q.parameterName === "source_query");
+    expect(srcQ).toBeDefined();
+    expect(srcQ!.columns.map((c) => c.effectiveName)).toContain("Work_Item_id");
+  });
+
   it("full depth: includes sourceConnections and sinkConnections with linked service info", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDescribePipeline(graph, "Copy_To_Dataverse", "full");

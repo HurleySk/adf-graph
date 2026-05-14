@@ -4,6 +4,7 @@ import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js"
 import { asString, asNonDynamic } from "./expressionValue.js";
 import { makePipelineId } from "./nodeId.js";
 import { detectCdcPattern, type CdcPipelineInfo } from "./cdcPatterns.js";
+import { isSqlParameter, parseSqlParameter, type ParsedSqlParameter } from "./sqlParameterParser.js";
 
 export interface ResolvedParameter {
   name: string;
@@ -18,7 +19,10 @@ export interface ResolvedChildPipeline {
   callerActivity: string;
   resolvedParameters: ResolvedParameter[];
   cdcInfo: CdcPipelineInfo | null;
+  parsedQueries: ParsedSqlParameter[];
 }
+
+export type { ParsedSqlParameter } from "./sqlParameterParser.js";
 
 export function resolveChildParameters(
   graph: Graph,
@@ -82,10 +86,19 @@ export function resolveChildParameters(
 
   const cdcInfo = detectCdcPattern(concreteValues);
 
+  const parsedQueries: ParsedSqlParameter[] = [];
+  for (const [key, rp] of resolvedParams) {
+    if (!isSqlParameter(key)) continue;
+    const sqlStr = typeof rp.resolvedValue === "string" ? rp.resolvedValue : null;
+    if (!sqlStr || sqlStr.startsWith("@") || sqlStr.trim() === "") continue;
+    parsedQueries.push(parseSqlParameter(key, sqlStr));
+  }
+
   return {
     childPipeline: meta.executedPipeline,
     callerActivity: activityNode.name,
     resolvedParameters: Array.from(resolvedParams.values()),
     cdcInfo: cdcInfo.isCdc ? cdcInfo : null,
+    parsedQueries,
   };
 }
