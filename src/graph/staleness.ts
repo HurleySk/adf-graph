@@ -6,8 +6,19 @@ import { WATCHED_DIRS } from "../constants.js";
  * Recursively find the maximum mtime (in milliseconds) under a directory.
  * Returns 0 if the directory doesn't exist or is empty.
  */
-function maxMtimeMs(dir: string): number {
+function maxMtimeMs(dir: string, knownMax?: number): number {
   if (!existsSync(dir)) return 0;
+
+  let dirStat;
+  try {
+    dirStat = statSync(dir);
+  } catch {
+    return 0;
+  }
+  // If directory itself hasn't been modified since knownMax, skip recursing
+  if (knownMax !== undefined && dirStat.mtimeMs <= knownMax) {
+    return 0;
+  }
 
   let max = 0;
   let entries: string[];
@@ -26,7 +37,7 @@ function maxMtimeMs(dir: string): number {
       continue;
     }
     if (stat.isDirectory()) {
-      const sub = maxMtimeMs(fullPath);
+      const sub = maxMtimeMs(fullPath, knownMax);
       if (sub > max) max = sub;
     } else {
       if (stat.mtimeMs > max) max = stat.mtimeMs;
@@ -79,9 +90,9 @@ export class StalenessChecker {
       return this.lastCheckResult;
     }
 
-    const currentMax = this.currentMaxMtime();
+    const currentMax = this.currentMaxMtime(this.builtMaxMtime!);
     this.lastCheckTime = Date.now();
-    this.lastCheckResult = currentMax > this.builtMaxMtime;
+    this.lastCheckResult = currentMax > this.builtMaxMtime!;
     return this.lastCheckResult;
   }
 
@@ -133,12 +144,12 @@ export class StalenessChecker {
     this.lastCheckTime = null;
   }
 
-  private currentMaxMtime(): number {
+  currentMaxMtime(pruneBelow?: number): number {
     let max = 0;
     for (const rootPath of this.rootPaths) {
       for (const dir of WATCHED_DIRS) {
         const fullDir = join(rootPath, dir);
-        const m = maxMtimeMs(fullDir);
+        const m = maxMtimeMs(fullDir, pruneBelow);
         if (m > max) max = m;
       }
     }

@@ -59,6 +59,7 @@ export class Graph {
   private nodes: Map<string, GraphNode> = new Map();
   private outgoing: Map<string, GraphEdge[]> = new Map();
   private incoming: Map<string, GraphEdge[]> = new Map();
+  private typeIndex: Map<NodeType, GraphNode[]> = new Map();
 
   addNode(node: GraphNode): void {
     this.nodes.set(node.id, node);
@@ -68,6 +69,9 @@ export class Graph {
     if (!this.incoming.has(node.id)) {
       this.incoming.set(node.id, []);
     }
+    const typeList = this.typeIndex.get(node.type);
+    if (typeList) typeList.push(node);
+    else this.typeIndex.set(node.type, [node]);
   }
 
   getNode(id: string): GraphNode | undefined {
@@ -95,13 +99,7 @@ export class Graph {
   }
 
   getNodesByType(type: NodeType): GraphNode[] {
-    const result: GraphNode[] = [];
-    for (const node of this.nodes.values()) {
-      if (node.type === type) {
-        result.push(node);
-      }
-    }
-    return result;
+    return this.typeIndex.get(type) ?? [];
   }
 
   stats(): GraphStats {
@@ -218,6 +216,7 @@ export class Graph {
   }
 
   replaceNode(node: GraphNode): void {
+    const old = this.nodes.get(node.id);
     this.nodes.set(node.id, node);
     if (!this.outgoing.has(node.id)) {
       this.outgoing.set(node.id, []);
@@ -225,6 +224,26 @@ export class Graph {
     if (!this.incoming.has(node.id)) {
       this.incoming.set(node.id, []);
     }
+    if (old) {
+      const typeList = this.typeIndex.get(old.type);
+      if (typeList) {
+        const idx = typeList.indexOf(old);
+        if (idx !== -1) {
+          if (old.type === node.type) {
+            typeList[idx] = node;
+          } else {
+            typeList.splice(idx, 1);
+            const newList = this.typeIndex.get(node.type);
+            if (newList) newList.push(node);
+            else this.typeIndex.set(node.type, [node]);
+          }
+          return;
+        }
+      }
+    }
+    const list = this.typeIndex.get(node.type);
+    if (list) list.push(node);
+    else this.typeIndex.set(node.type, [node]);
   }
 
   removeEdgesForNode(id: string): void {
