@@ -46,6 +46,10 @@ export function parseCopyActivity(
   const inputs = (activity.inputs as unknown[]) ?? [];
   const outputs = (activity.outputs as unknown[]) ?? [];
 
+  const source = typeProperties?.source as Record<string, unknown> | undefined;
+  const sqlText = asString(source?.sqlReaderQuery) ?? null;
+  const hasSqlOverride = sqlText !== null;
+
   for (const inp of inputs) {
     const i = inp as Record<string, unknown>;
     const refName = asString(i.referenceName);
@@ -58,7 +62,7 @@ export function parseCopyActivity(
     });
 
     const params = i.parameters as Record<string, unknown> | undefined;
-    if (params) {
+    if (params && !hasSqlOverride) {
       processDatasetParams(activityId, params, "reads_from", edges);
     }
   }
@@ -79,9 +83,6 @@ export function parseCopyActivity(
       processDatasetParams(activityId, params, "writes_to", edges);
     }
   }
-
-  const source = typeProperties?.source as Record<string, unknown> | undefined;
-  const sqlText = asString(source?.sqlReaderQuery) ?? null;
   if (sqlText) {
     const tables = extractTablesFromSql(sqlText);
     for (const tbl of tables) {

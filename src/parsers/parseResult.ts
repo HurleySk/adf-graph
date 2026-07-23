@@ -6,14 +6,29 @@ export interface ParseResult {
   warnings: string[];
 }
 
+const SQL_KEYWORDS = new Set([
+  "select", "values", "openrowset", "openjson",
+  "opendatasource", "openquery", "openxml",
+]);
+
+function resolveTableRef(match: RegExpExecArray): string | null {
+  if (match[2]) {
+    return `${match[1]}.${match[2]}`;
+  }
+  if (SQL_KEYWORDS.has(match[1].toLowerCase())) {
+    return null;
+  }
+  return `dbo.${match[1]}`;
+}
+
 /**
  * Extract schema.table pairs from SQL using FROM/JOIN patterns.
- * Only extracts tables at the top query level — tables inside
+ * Only extracts tables at the top query level -- tables inside
  * parenthesized subqueries (e.g. WHERE EXISTS (...)) are excluded
  * because they are filters, not data sources.
  */
 export function extractTablesFromSql(sql: string): string[] {
-  const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?\.\[?(\w+)\]?/gi;
+  const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?(?:\.\[?(\w+)\]?)?/gi;
   const results: string[] = [];
 
   // Pre-compute parenthesis depth at each character position
@@ -28,7 +43,8 @@ export function extractTablesFromSql(sql: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = regex.exec(sql)) !== null) {
     if (depth[match.index] === 0) {
-      results.push(`${match[1]}.${match[2]}`);
+      const ref = resolveTableRef(match);
+      if (ref) results.push(ref);
     }
   }
   return results;
@@ -44,7 +60,7 @@ export interface TableRef {
  * Callers can distinguish main tables (depth 0) from subquery tables (depth > 0).
  */
 export function extractAllTablesFromSql(sql: string): TableRef[] {
-  const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?\.\[?(\w+)\]?/gi;
+  const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?(?:\.\[?(\w+)\]?)?/gi;
   const results: TableRef[] = [];
 
   const depthArr = new Int8Array(sql.length);
@@ -57,7 +73,8 @@ export function extractAllTablesFromSql(sql: string): TableRef[] {
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(sql)) !== null) {
-    results.push({ table: `${match[1]}.${match[2]}`, depth: depthArr[match.index] });
+    const ref = resolveTableRef(match);
+    if (ref) results.push({ table: ref, depth: depthArr[match.index] });
   }
   return results;
 }

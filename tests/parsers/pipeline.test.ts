@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { parsePipelineFile, extractTablesFromSql } from "../../src/parsers/pipeline.js";
+import { parsePipelineFile, extractTablesFromSql, extractAllTablesFromSql } from "../../src/parsers/pipeline.js";
 
 const fixtureDir = join(import.meta.dirname, "../fixtures/pipeline");
 
@@ -345,6 +345,32 @@ describe("parsePipelineFile", () => {
     expect(spEdge).toBeDefined();
     expect(spEdge!.to).toContain("pipeline().parameters.sp_name");
   });
+
+  it("sqlReaderQuery overrides dataset parameter tables as source (copy-sql-override)", () => {
+    const result = parsePipelineFile(loadFixture("copy-sql-override.json"));
+    const readsFrom = result.edges.filter(
+      (e) => e.type === "reads_from" && e.to.startsWith("table:")
+    );
+    expect(readsFrom.map((e) => e.to)).toContain("table:dbo.litigation_settlement");
+    expect(readsFrom.map((e) => e.to)).not.toContain("table:dbo.Commission_Meeting");
+  });
+
+  it("preserves UsesDataset input edge when sqlReaderQuery overrides (copy-sql-override)", () => {
+    const result = parsePipelineFile(loadFixture("copy-sql-override.json"));
+    const usesDatasetInput = result.edges.filter(
+      (e) => e.type === "uses_dataset" && e.metadata.direction === "input"
+    );
+    expect(usesDatasetInput).toHaveLength(1);
+    expect(usesDatasetInput[0].to).toBe("dataset:ds_sql_source");
+  });
+
+  it("preserves output WritesTo edges when sqlReaderQuery overrides (copy-sql-override)", () => {
+    const result = parsePipelineFile(loadFixture("copy-sql-override.json"));
+    const writesTo = result.edges.filter(
+      (e) => e.type === "writes_to" && e.to.startsWith("table:")
+    );
+    expect(writesTo.map((e) => e.to)).toContain("table:dbo.Litigation_Settlement_Staging");
+  });
 });
 
 describe("extractTablesFromSql", () => {
@@ -368,5 +394,46 @@ describe("extractTablesFromSql", () => {
     expect(tables).toContain("dbo.Work_Set");
     expect(tables).toContain("dbo.Work_Set_FERC_Organization");
     expect(tables).not.toContain("cdc.dbo_Work_Set_ct");
+  });
+
+  it("extracts unqualified table names with dbo default schema", () => {
+    const sql = "SELECT * FROM litigation_settlement t1";
+    const tables = extractTablesFromSql(sql);
+    expect(tables).toContain("dbo.litigation_settlement");
+  });
+
+  it("extracts unqualified table names from JOIN", () => {
+    const sql = "SELECT a.id FROM Work_Item a LEFT JOIN Work_Item_Detail b ON a.id = b.fk";
+    const tables = extractTablesFromSql(sql);
+    expect(tables).toContain("dbo.Work_Item");
+    expect(tables).toContain("dbo.Work_Item_Detail");
+  });
+
+  it("handles mixed qualified and unqualified tables", () => {
+    const sql = "SELECT * FROM dbo.Org_Staging a JOIN litigation_settlement b ON a.id = b.id";
+    const tables = extractTablesFromSql(sql);
+    expect(tables).toContain("dbo.Org_Staging");
+    expect(tables).toContain("dbo.litigation_settlement");
+  });
+
+  it("extracts bracket-wrapped unqualified table names", () => {
+    const sql = "SELECT * FROM [litigation_settlement]";
+    const tables = extractTablesFromSql(sql);
+    expect(tables).toContain("dbo.litigation_settlement");
+  });
+
+  it("does not treat SQL keywords as table names", () => {
+    const sql = "INSERT INTO dbo.target SELECT * FROM (SELECT id FROM dbo.inner_table) sub";
+    const tables = extractTablesFromSql(sql);
+    expect(tables).not.toContain("dbo.SELECT");
+  });
+});
+
+describe("extractAllTablesFromSql", () => {
+  it("extracts unqualified table names at all depths", () => {
+    const sql = "SELECT * FROM litigation_settlement WHERE EXISTS (SELECT 1 FROM cdc_table)";
+    const tables = extractAllTablesFromSql(sql);
+    expect(tables.some((t) => t.table === "dbo.litigation_settlement" && t.depth === 0)).toBe(true);
+    expect(tables.some((t) => t.table === "dbo.cdc_table" && t.depth === 1)).toBe(true);
   });
 });
