@@ -1,5 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { lookupPipelineNode, resolveDestQueryDefaults, resolveActivityParams, getTableEdges } from "./toolUtils.js";
 import { detectCdcPattern, classifyStagingRole, isCdcPipeline, type CdcPipelineInfo, type StagingRole } from "../utils/cdcPatterns.js";
 import { extractAllTablesFromSql } from "../parsers/parseResult.js";
@@ -85,12 +86,7 @@ export function handleStagingPopulation(
   }
 
   // Also scan ExecutePipeline activities for CDC params and dest_query
-  const outgoing = graph.getOutgoing(lookup.id);
-  for (const edge of outgoing) {
-    if (edge.type !== EdgeType.Contains) continue;
-    const actNode = graph.getNode(edge.to);
-    if (!actNode || actNode.type !== NodeType.Activity) continue;
-
+  for (const actNode of collectPipelineActivities(graph, lookup.id)) {
     const meta = getActivityMetadata(actNode);
     if (meta.activityType !== "ExecutePipeline" || !meta.pipelineParameters) continue;
 

@@ -279,6 +279,44 @@ describe("parsePipelineFile", () => {
     expect(innerCopy!.metadata.sqlQuery).toContain("dbo.RegionData");
   });
 
+  it("extracts inner activities from Switch cases and defaultActivities", () => {
+    const result = parsePipelineFile(loadFixture("nested-dataverse-copy.json"));
+    const ids = result.nodes.map((n) => n.id);
+
+    expect(ids).toContain("activity:Nested_Dataverse_Copy/Route By Region");
+    expect(ids).toContain(
+      "activity:Nested_Dataverse_Copy/Route By Region/For Each East Batch",
+    );
+    expect(ids).toContain(
+      "activity:Nested_Dataverse_Copy/Route By Region/Truncate West Staging",
+    );
+    expect(ids).toContain(
+      "activity:Nested_Dataverse_Copy/Route By Region/Load Fallback Orgs",
+    );
+  });
+
+  it("extracts activities nested three levels below a Switch", () => {
+    const result = parsePipelineFile(loadFixture("nested-dataverse-copy.json"));
+    const deepCopy = result.nodes.find(
+      (n) =>
+        n.id ===
+        "activity:Nested_Dataverse_Copy/Route By Region/For Each East Batch/Batch Upsert Orgs/Upsert Org Batch",
+    );
+    expect(deepCopy).toBeDefined();
+    expect(deepCopy!.metadata.sinkType).toBe("CommonDataServiceForAppsSink");
+    expect(deepCopy!.metadata.sqlQuery).toContain("as statuscode");
+  });
+
+  it("creates a writes_to edge from a deeply nested Copy to its Dataverse entity", () => {
+    const result = parsePipelineFile(loadFixture("nested-dataverse-copy.json"));
+    const deepCopyId =
+      "activity:Nested_Dataverse_Copy/Route By Region/For Each East Batch/Batch Upsert Orgs/Upsert Org Batch";
+    const writes = result.edges.filter(
+      (e) => e.type === "writes_to" && e.from === deepCopyId,
+    );
+    expect(writes.map((e) => e.to)).toContain("dataverse_entity:alm_organization");
+  });
+
   it("resolves DependsOn within container scope", () => {
     const result = parsePipelineFile(loadFixture("container-activities.json"));
     const depEdges = result.edges.filter(

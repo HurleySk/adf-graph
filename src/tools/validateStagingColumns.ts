@@ -5,6 +5,7 @@ import { asNonDynamic } from "../utils/expressionValue.js";
 import { parseTableDdl } from "../parsers/tableDdlParser.js";
 import { extractSourceQueryColumns } from "../parsers/sourceQueryParser.js";
 import { lookupPipelineNode } from "./toolUtils.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 
 export interface StagingColumnMismatch {
   sourceColumn: string;
@@ -47,11 +48,7 @@ function hasExplicitColumnMappings(graph: Graph, activityNode: { id: string; met
 
   // Check if the child pipeline's Copy activities have MapsColumn edges
   const childPipelineId = `pipeline:${executedPipeline}`;
-  const childEdges = graph.getOutgoing(childPipelineId);
-  for (const edge of childEdges) {
-    if (edge.type !== EdgeType.Contains) continue;
-    const childNode = graph.getNode(edge.to);
-    if (!childNode || childNode.type !== NodeType.Activity) continue;
+  for (const childNode of collectPipelineActivities(graph, childPipelineId)) {
     if (childNode.metadata.activityType !== "Copy") continue;
 
     const copyEdges = graph.getOutgoing(childNode.id);
@@ -81,24 +78,14 @@ export function handleValidateStagingColumns(
         warnings: [lookup.error],
       };
     }
-    const contained = graph.getOutgoing(lookup.id);
-    for (const edge of contained) {
-      if (edge.type !== EdgeType.Contains) continue;
-      const node = graph.getNode(edge.to);
-      if (node && node.type === NodeType.Activity) {
-        activityNodes.push({ node, pipelineName: pipeline });
-      }
+    for (const node of collectPipelineActivities(graph, lookup.id)) {
+      activityNodes.push({ node, pipelineName: pipeline });
     }
   } else {
     const pipelines = graph.getNodesByType(NodeType.Pipeline);
     for (const pl of pipelines) {
-      const contained = graph.getOutgoing(pl.id);
-      for (const edge of contained) {
-        if (edge.type !== EdgeType.Contains) continue;
-        const node = graph.getNode(edge.to);
-        if (node && node.type === NodeType.Activity) {
-          activityNodes.push({ node, pipelineName: pl.name });
-        }
+      for (const node of collectPipelineActivities(graph, pl.id)) {
+        activityNodes.push({ node, pipelineName: pl.name });
       }
     }
   }

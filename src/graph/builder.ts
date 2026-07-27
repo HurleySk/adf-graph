@@ -5,7 +5,7 @@ import { ADF_DIRS } from "../constants.js";
 import { inferNodeType, parseNodeId, makeNodeId, makeActivityId, makeIntegrationRuntimeId } from "../utils/nodeId.js";
 import { ParseResult, parsePipelineFile } from "../parsers/pipeline.js";
 import { extractColumnMappings } from "../parsers/columns.js";
-import { CONTAINER_TYPES } from "../parsers/activities/container.js";
+import { getNestedActivities } from "../parsers/activities/container.js";
 import { parseDatasetFile } from "../parsers/dataset.js";
 import { parseLinkedServiceFile } from "../parsers/linkedService.js";
 import { scanSqlDirectory } from "../parsers/sql.js";
@@ -97,15 +97,9 @@ function extractColumnMappingsRecursive(
       }
     }
 
-    const containerProps = CONTAINER_TYPES[activityType];
-    if (containerProps) {
-      const typeProperties = activity.typeProperties as Record<string, unknown> | undefined;
-      if (typeProperties) {
-        for (const key of containerProps) {
-          const innerActivities = (typeProperties[key] as unknown[]) ?? [];
-          extractColumnMappingsRecursive(innerActivities, pipelineName, `${fullPrefix}/`, graph);
-        }
-      }
+    const nested = getNestedActivities(activity);
+    if (nested.length > 0) {
+      extractColumnMappingsRecursive(nested, pipelineName, `${fullPrefix}/`, graph);
     }
   }
 }

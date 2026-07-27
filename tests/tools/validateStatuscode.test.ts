@@ -93,4 +93,32 @@ describe("handleValidateStatuscode", () => {
     );
     expect(loadOrgsStatecode).toBeUndefined();
   });
+
+  it("validates a Copy activity nested inside Switch > ForEach > Until", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidateStatuscode(graph, "Nested_Dataverse_Copy", schemaPath);
+
+    expect(result.error).toBeUndefined();
+
+    const nested = result.validations.find(
+      (v) => v.activityName === "Upsert Org Batch" && v.alias === "statuscode"
+    );
+    expect(nested).toBeDefined();
+    expect(nested!.entityName).toBe("alm_organization");
+    expect(nested!.optionSetAvailable).toBe(true);
+    expect(nested!.mappedValues).toEqual([1, 999, 2]);
+    expect(nested!.invalidValues).toEqual([999]);
+  });
+
+  it("validates an ExecutePipeline nested in Switch defaultActivities", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidateStatuscode(graph, "Nested_Dataverse_Copy", schemaPath);
+
+    const fallback = result.validations.find(
+      (v) => v.activityName === "Load Fallback Orgs" && v.alias === "statuscode"
+    );
+    expect(fallback).toBeDefined();
+    expect(fallback!.mappedValues).toContain(998);
+    expect(fallback!.invalidValues).toContain(998);
+  });
 });

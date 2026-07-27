@@ -3,6 +3,7 @@ import { makeNodeId, makeEntityId, makePipelineId, makeTableId, parseActivityId 
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { loadEntityDetail } from "../parsers/dataverseSchema.js";
 import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { resolveChildParameters } from "../utils/parameterResolver.js";
 
 export interface PipelineLookupSuccess {
@@ -28,6 +29,46 @@ export function lookupPipelineNode(graph: Graph, pipeline: string): PipelineLook
   return { node, id, error: undefined };
 }
 
+export const DATAVERSE_SINK_TYPES = new Set([
+  "CommonDataServiceForAppsSink",
+  "DynamicsSink",
+  "DynamicsCrmSink",
+]);
+
+/**
+ * The SQL text that shapes the rows an activity writes to Dataverse.
+ *
+ * Two shapes carry it:
+ *   - ExecutePipeline activities driving a generic loader pass it as the
+ *     `dest_query` pipeline parameter.
+ *   - Plain Copy activities with a Dataverse sink carry it inline as the
+ *     source `sqlReaderQuery`; its column aliases are the target attribute
+ *     names, exactly like a dest_query.
+ *
+ * Copy activities with an explicit TabularTranslator column mapping are
+ * excluded: there the sink columns are declared outright, so the source
+ * aliases carry no attribute-name contract.
+ */
+export function getActivityDestQuery(graph: Graph, activityNode: GraphNode): string | null {
+  const meta = getActivityMetadata(activityNode);
+
+  const destQuery = meta.pipelineParameters
+    ? asNonDynamic(meta.pipelineParameters.dest_query)
+    : undefined;
+  if (destQuery) return destQuery;
+
+  if (meta.activityType !== "Copy") return null;
+  if (!meta.sinkType || !DATAVERSE_SINK_TYPES.has(meta.sinkType)) return null;
+  if (!meta.sqlQuery) return null;
+
+  const hasExplicitMappings = graph
+    .getOutgoing(activityNode.id)
+    .some((e) => e.type === EdgeType.MapsColumn);
+  if (hasExplicitMappings) return null;
+
+  return meta.sqlQuery;
+}
+
 export function resolveEntityName(
   graph: Graph,
   activityNode: GraphNode,
@@ -40,24 +81,19 @@ export function resolveEntityName(
     }
   }
 
+  // Copy activities write the entity directly -- no child pipeline to follow
+  const written = getWrittenEntity(graph, activityNode.id);
+  if (written) return written;
+
   const outgoing = graph.getOutgoing(activityNode.id);
   for (const edge of outgoing) {
     if (edge.type !== EdgeType.Executes) continue;
     const childPipeline = graph.getNode(edge.to);
     if (!childPipeline) continue;
 
-    const childEdges = graph.getOutgoing(edge.to);
-    for (const childEdge of childEdges) {
-      if (childEdge.type !== EdgeType.Contains) continue;
-      const childActivity = graph.getNode(childEdge.to);
-      if (!childActivity || childActivity.type !== NodeType.Activity) continue;
-
-      const actEdges = graph.getOutgoing(childActivity.id);
-      for (const actEdge of actEdges) {
-        if (actEdge.type === EdgeType.WritesTo && actEdge.to.startsWith("dataverse_entity:")) {
-          return actEdge.to.replace("dataverse_entity:", "");
-        }
-      }
+    for (const childActivity of collectPipelineActivities(graph, edge.to)) {
+      const childWritten = getWrittenEntity(graph, childActivity.id);
+      if (childWritten) return childWritten;
     }
   }
 

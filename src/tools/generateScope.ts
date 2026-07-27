@@ -1,6 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode } from "./toolUtils.js";
-import { findExecutePipelineActivities } from "../graph/traversalUtils.js";
+import { findExecutePipelineActivities, collectPipelineActivities } from "../graph/traversalUtils.js";
 import { parseNodeId } from "../utils/nodeId.js";
 
 export interface PipelineInfo {
@@ -98,12 +98,9 @@ export function handleGenerateScope(
         }
       }
 
-      // Collect artifacts from all activities in this pipeline (Contains edges)
-      const containsEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Contains);
-      for (const ce of containsEdges) {
-        const actNode = graph.getNode(ce.to);
-        if (!actNode) continue;
-
+      // Collect artifacts from all activities in this pipeline, including
+      // activities nested inside container activities
+      for (const actNode of collectPipelineActivities(graph, pipelineId)) {
         const actOutgoing = graph.getOutgoing(actNode.id);
         for (const edge of actOutgoing) {
           const targetNode = graph.getNode(edge.to);

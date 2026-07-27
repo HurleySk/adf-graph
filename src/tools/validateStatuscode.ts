@@ -1,5 +1,6 @@
-import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
-import { lookupPipelineNode, resolveEntityName, getEntityAttributes, resolveDestQueryDefaults } from "./toolUtils.js";
+import { Graph } from "../graph/model.js";
+import { lookupPipelineNode, resolveEntityName, getActivityDestQuery, resolveDestQueryDefaults } from "./toolUtils.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { makeEntityId } from "../utils/nodeId.js";
 import { loadEntityDetail, type OptionSetValue } from "../parsers/dataverseSchema.js";
 import {
@@ -8,7 +9,6 @@ import {
   extractCaseElseValue,
   type DestQueryAlias,
 } from "../parsers/destQueryParser.js";
-import { asNonDynamic } from "../utils/expressionValue.js";
 
 const STATUS_ALIASES = new Set(["statuscode", "statecode"]);
 
@@ -113,16 +113,8 @@ export function handleValidateStatuscode(
   const warnings: string[] = [];
   const validations: StatusCodeValidation[] = [];
 
-  const contained = graph.getOutgoing(lookup.id);
-  for (const edge of contained) {
-    if (edge.type !== EdgeType.Contains) continue;
-    const actNode = graph.getNode(edge.to);
-    if (!actNode || actNode.type !== NodeType.Activity) continue;
-
-    const params = actNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
-    if (!params) continue;
-
-    const destQuery = asNonDynamic(params.dest_query);
+  for (const actNode of collectPipelineActivities(graph, lookup.id)) {
+    const destQuery = getActivityDestQuery(graph, actNode);
     if (!destQuery) continue;
 
     const entityName = resolveEntityName(graph, actNode);

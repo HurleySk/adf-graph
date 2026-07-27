@@ -1,13 +1,7 @@
 import { Graph, NodeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseActivityId } from "../utils/nodeId.js";
-import { getWrittenEntity } from "./toolUtils.js";
-
-const DATAVERSE_SINK_TYPES = new Set([
-  "CommonDataServiceForAppsSink",
-  "DynamicsSink",
-  "DynamicsCrmSink",
-]);
+import { getWrittenEntity, DATAVERSE_SINK_TYPES } from "./toolUtils.js";
 
 export interface IgnoreNullValuesEntry {
   pipeline: string;

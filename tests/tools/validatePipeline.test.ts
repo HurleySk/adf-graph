@@ -135,4 +135,32 @@ describe("handleValidatePipeline", () => {
       result.summary.validColumns + result.summary.invalidColumns + result.summary.systemColumns + result.summary.annotationColumns
     );
   });
+
+  it("validates a Dataverse Copy activity nested inside container activities", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidatePipeline(graph, "Nested_Dataverse_Copy", schemaPath);
+
+    expect(result.error).toBeUndefined();
+
+    const nested = result.activities.find((a) => a.activityName === "Upsert Org Batch");
+    expect(nested).toBeDefined();
+    expect(nested!.entityName).toBe("alm_organization");
+    expect(nested!.columns.map((c) => c.alias)).toEqual([
+      "alm_orgid",
+      "alm_name",
+      "nonexistent_attr",
+      "statuscode",
+    ]);
+    expect(nested!.columns.find((c) => c.alias === "nonexistent_attr")!.status).toBe("invalid");
+    expect(nested!.columns.find((c) => c.alias === "statuscode")!.status).toBe("system");
+  });
+
+  it("skips Copy activities that declare explicit column mappings", () => {
+    const { graph } = buildGraph(fixtureRoot, schemaPath);
+    const result = handleValidatePipeline(graph, "Pipeline_With_Containers", schemaPath);
+
+    // "Copy Batch" writes Dataverse but declares a TabularTranslator mapping,
+    // so its source aliases carry no attribute-name contract.
+    expect(result.activities.find((a) => a.activityName === "Copy Batch")).toBeUndefined();
+  });
 });

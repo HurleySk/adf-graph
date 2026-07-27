@@ -1,5 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { parseActivityId, parseNodeId, makePipelineId } from "../utils/nodeId.js";
 import { TRUNCATE_PATTERN } from "./toolUtils.js";
 
@@ -38,10 +39,8 @@ function activityHasTruncateFor(graph: Graph, activityId: string, tableName: str
 }
 
 function pipelineHasTruncateFor(graph: Graph, pipelineId: string, tableName: string): boolean {
-  const outgoing = graph.getOutgoing(pipelineId);
-  for (const edge of outgoing) {
-    if (edge.type !== EdgeType.Contains) continue;
-    if (activityHasTruncateFor(graph, edge.to, tableName)) return true;
+  for (const actNode of collectPipelineActivities(graph, pipelineId)) {
+    if (activityHasTruncateFor(graph, actNode.id, tableName)) return true;
   }
   return false;
 }

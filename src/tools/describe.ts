@@ -2,6 +2,7 @@ import { Graph, NodeType, EdgeType, type GraphEdge } from "../graph/model.js";
 import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseNodeId } from "../utils/nodeId.js";
 import { lookupPipelineNode, resolveDatasetLinkedServices } from "./toolUtils.js";
+import { collectContainedActivities } from "../graph/traversalUtils.js";
 import { resolveChildParameters, type ResolvedChildPipeline } from "../utils/parameterResolver.js";
 
 export type DescribeDepth = "summary" | "activities" | "full" | "resolved";
@@ -113,16 +114,12 @@ export function handleDescribePipeline(
 
   const effectiveDepth = activity ? "full" : (depth === "resolved" ? "resolved" : depth);
 
-  // Recursively collect activities through the Contains tree
-  function collectActivities(parentId: string, parentName?: string): ActivityInfo[] {
-    const parentOutgoing = graph.getOutgoing(parentId);
-    const containedEdges = parentOutgoing.filter((e) => e.type === EdgeType.Contains);
+  // Collect activities through the Contains tree, including activities nested
+  // inside container activities (Until, ForEach, Switch, IfCondition).
+  function collectActivities(rootId: string): ActivityInfo[] {
     const collected: ActivityInfo[] = [];
 
-    for (const containsEdge of containedEdges) {
-      const activityNode = graph.getNode(containsEdge.to);
-      if (!activityNode || activityNode.type !== NodeType.Activity) continue;
-
+    for (const { node: activityNode, parent } of collectContainedActivities(graph, rootId)) {
       const activityType = getActivityType(activityNode);
 
       const actOutgoing = graph.getOutgoing(activityNode.id);
@@ -139,8 +136,8 @@ export function handleDescribePipeline(
         dependsOn,
       };
 
-      if (parentName) {
-        activityInfo.parentActivity = parentName;
+      if (parent) {
+        activityInfo.parentActivity = parent.name;
       }
 
       if (effectiveDepth === "full" || effectiveDepth === "resolved") {
@@ -183,10 +180,6 @@ export function handleDescribePipeline(
       }
 
       collected.push(activityInfo);
-
-      // Recurse into container activities
-      const innerActivities = collectActivities(activityNode.id, activityNode.name);
-      collected.push(...innerActivities);
     }
 
     return collected;

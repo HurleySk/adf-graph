@@ -1,5 +1,6 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { Graph, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { lookupPipelineNode, resolveActivityParams, getTableEdges } from "./toolUtils.js";
 import { detectCdcPattern, isCdcPipeline, classifyStagingRole, type CdcPipelineInfo, type StagingRole } from "../utils/cdcPatterns.js";
 import { extractWhereClause, type FilterCondition, type WhereClause } from "../parsers/sqlWhereParser.js";
@@ -204,46 +205,28 @@ export function handleCdcAnalysis(
   const cdcCalls: CdcCallSite[] = [];
 
   // Walk all activities in this pipeline (recursively through containers)
-  const queue = [lookup.id];
-  const visited = new Set<string>();
+  for (const actNode of collectPipelineActivities(graph, lookup.id)) {
+    const meta = getActivityMetadata(actNode);
 
-  while (queue.length > 0) {
-    const parentId = queue.shift()!;
-    if (visited.has(parentId)) continue;
-    visited.add(parentId);
+    // Check if this is an ExecutePipeline calling a CDC child
+    if (meta.activityType !== "ExecutePipeline" || !meta.pipelineParameters) continue;
 
-    const outgoing = graph.getOutgoing(parentId);
-    for (const edge of outgoing) {
-      if (edge.type !== EdgeType.Contains) continue;
-      const actNode = graph.getNode(edge.to);
-      if (!actNode || actNode.type !== NodeType.Activity) continue;
+    const params = resolveActivityParams(graph, actNode);
+    if (!isCdcPipeline(params as Record<string, unknown>)) continue;
 
-      const meta = getActivityMetadata(actNode);
+    const cdcInfo = detectCdcPattern(params as Record<string, unknown>);
+    const stagingTables = buildStagingTables(graph, cdcInfo);
+    const filterChain = buildFilterChain(cdcInfo);
+    const gaps = detectGaps(cdcInfo, stagingTables, graph);
 
-      // Check if this is an ExecutePipeline calling a CDC child
-      if (meta.activityType === "ExecutePipeline" && meta.pipelineParameters) {
-        const params = resolveActivityParams(graph, actNode);
-
-        if (isCdcPipeline(params as Record<string, unknown>)) {
-          const cdcInfo = detectCdcPattern(params as Record<string, unknown>);
-          const stagingTables = buildStagingTables(graph, cdcInfo);
-          const filterChain = buildFilterChain(cdcInfo);
-          const gaps = detectGaps(cdcInfo, stagingTables, graph);
-
-          cdcCalls.push({
-            callerActivity: actNode.name,
-            childPipeline: meta.executedPipeline ?? "unknown",
-            cdcInfo,
-            stagingTables,
-            filterChain,
-            gaps,
-          });
-        }
-      }
-
-      // Recurse into container activities
-      queue.push(actNode.id);
-    }
+    cdcCalls.push({
+      callerActivity: actNode.name,
+      childPipeline: meta.executedPipeline ?? "unknown",
+      cdcInfo,
+      stagingTables,
+      filterChain,
+      gaps,
+    });
   }
 
   // Build summary

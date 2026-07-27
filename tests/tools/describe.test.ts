@@ -120,6 +120,34 @@ describe("handleDescribePipeline", () => {
     expect(regionCopy!.sqlQuery).toContain("dbo.RegionData");
   });
 
+  it("full depth: shows inner activities from Switch cases and defaultActivities", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Nested_Dataverse_Copy", "full");
+
+    const caseChild = result.activities!.find((a) => a.name === "For Each East Batch");
+    expect(caseChild!.parentActivity).toBe("Route By Region");
+
+    const westChild = result.activities!.find((a) => a.name === "Truncate West Staging");
+    expect(westChild!.parentActivity).toBe("Route By Region");
+
+    const fallback = result.activities!.find((a) => a.name === "Load Fallback Orgs");
+    expect(fallback!.parentActivity).toBe("Route By Region");
+
+    // Three levels below the Switch
+    const deepCopy = result.activities!.find((a) => a.name === "Upsert Org Batch");
+    expect(deepCopy).toBeDefined();
+    expect(deepCopy!.parentActivity).toBe("Batch Upsert Orgs");
+    expect(deepCopy!.sinks).toContain("dataverse_entity:alm_organization");
+  });
+
+  it("full depth: nested activities appear directly after their container", () => {
+    const { graph } = buildGraph(fixtureRoot);
+    const result = handleDescribePipeline(graph, "Pipeline_With_Containers", "full");
+    const names = result.activities!.map((a) => a.name);
+    expect(names.indexOf("Copy Batch")).toBe(names.indexOf("Batch Upsert Loop") + 1);
+    expect(names.indexOf("Increment Offset")).toBe(names.indexOf("Copy Batch") + 1);
+  });
+
   it("activity filter: returns only the named activity with full detail", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleDescribePipeline(graph, "Copy_To_Dataverse", "summary", "Upsert Organizations");

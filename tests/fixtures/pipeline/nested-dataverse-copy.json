@@ -1,0 +1,143 @@
+{
+  "name": "Nested_Dataverse_Copy",
+  "properties": {
+    "parameters": {
+      "region": {
+        "type": "String",
+        "defaultValue": "east"
+      }
+    },
+    "activities": [
+      {
+        "name": "Route By Region",
+        "type": "Switch",
+        "dependsOn": [],
+        "typeProperties": {
+          "on": {
+            "value": "@pipeline().parameters.region",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "east",
+              "activities": [
+                {
+                  "name": "For Each East Batch",
+                  "type": "ForEach",
+                  "dependsOn": [],
+                  "typeProperties": {
+                    "items": {
+                      "value": "@pipeline().parameters.region",
+                      "type": "Expression"
+                    },
+                    "activities": [
+                      {
+                        "name": "Batch Upsert Orgs",
+                        "type": "Until",
+                        "dependsOn": [],
+                        "typeProperties": {
+                          "expression": {
+                            "value": "@greaterOrEquals(variables('offset'), variables('totalrows'))",
+                            "type": "Expression"
+                          },
+                          "activities": [
+                            {
+                              "name": "Upsert Org Batch",
+                              "type": "Copy",
+                              "dependsOn": [],
+                              "typeProperties": {
+                                "source": {
+                                  "type": "AzureSqlSource",
+                                  "sqlReaderQuery": {
+                                    "value": "with orgMeta as (\n  select org_id, max(rank_order) as top_rank\n  from dbo.Org_Rank_Staging\n  group by org_id\n)\nselect\n t1.org_id as alm_orgid\n,t1.org_name as alm_name\n,t1.bad_col as nonexistent_attr\n,case when t1.status = 'Active' then 1 when t1.status = 'Closed' then 999 else 2 end as statuscode\nfrom dbo.Org_Staging t1\nleft join orgMeta m on t1.org_id = m.org_id\nORDER BY t1.org_id\nOFFSET @{variables('offset')} ROWS\nFETCH NEXT @{variables('pagesize')} ROWS ONLY",
+                                    "type": "Expression"
+                                  }
+                                },
+                                "sink": {
+                                  "type": "CommonDataServiceForAppsSink",
+                                  "writeBehavior": "upsert",
+                                  "ignoreNullValues": true,
+                                  "alternateKeyName": "alm_orgid_key"
+                                }
+                              },
+                              "inputs": [
+                                {
+                                  "referenceName": "ds_sql_staging",
+                                  "type": "DatasetReference",
+                                  "parameters": {
+                                    "schema_name": "dbo",
+                                    "table_name": "Org_Staging"
+                                  }
+                                }
+                              ],
+                              "outputs": [
+                                {
+                                  "referenceName": "ds_dataverse",
+                                  "type": "DatasetReference",
+                                  "parameters": {
+                                    "entity_name": "alm_organization"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "name": "Advance Offset",
+                              "type": "SetVariable",
+                              "dependsOn": [
+                                {
+                                  "activity": "Upsert Org Batch",
+                                  "dependencyConditions": ["Succeeded"]
+                                }
+                              ],
+                              "typeProperties": {
+                                "variableName": "offset",
+                                "value": "@add(int(variables('offset')), 1000)"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "value": "west",
+              "activities": [
+                {
+                  "name": "Truncate West Staging",
+                  "type": "SqlServerStoredProcedure",
+                  "dependsOn": [],
+                  "typeProperties": {
+                    "storedProcedureName": "dbo.p_Transform_Org",
+                    "storedProcedureParameters": {}
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "Load Fallback Orgs",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Copy_To_Dataverse",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "dest_query": "SELECT org_id AS alm_orgid, CASE WHEN status = 'Active' THEN 1 ELSE 998 END AS statuscode FROM dbo.Org_Staging",
+                  "dataverse_entity_name": "alm_organization"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": []
+  }
+}

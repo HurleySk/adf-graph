@@ -1,6 +1,7 @@
 import { GraphManager } from "../graph/manager.js";
 import { Graph } from "../graph/model.js";
 import { NodeType, EdgeType } from "../graph/model.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 
 export interface ItemDiffSummary {
   name: string;
@@ -88,15 +89,11 @@ function comparePipeline(
 ): string[] {
   const changes: string[] = [];
 
-  const activitiesA = graphA
-    .getOutgoing(idA)
-    .filter((e) => e.type === EdgeType.Contains);
-  const activitiesB = graphB
-    .getOutgoing(idB)
-    .filter((e) => e.type === EdgeType.Contains);
+  const activitiesA = collectPipelineActivities(graphA, idA);
+  const activitiesB = collectPipelineActivities(graphB, idB);
 
-  const actNamesA = new Set(activitiesA.map((e) => graphA.getNode(e.to)?.name).filter(Boolean));
-  const actNamesB = new Set(activitiesB.map((e) => graphB.getNode(e.to)?.name).filter(Boolean));
+  const actNamesA = new Set(activitiesA.map((n) => n.name));
+  const actNamesB = new Set(activitiesB.map((n) => n.name));
 
   if (activitiesA.length !== activitiesB.length) {
     changes.push(`activity count: ${activitiesA.length} → ${activitiesB.length}`);

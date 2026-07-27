@@ -1,7 +1,7 @@
-import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
-import { lookupPipelineNode, resolveEntityName, getEntityAttributes, resolveDestQueryDefaults } from "./toolUtils.js";
+import { Graph, GraphNode } from "../graph/model.js";
+import { lookupPipelineNode, resolveEntityName, getEntityAttributes, getActivityDestQuery, resolveDestQueryDefaults } from "./toolUtils.js";
+import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
-import { asNonDynamic } from "../utils/expressionValue.js";
 
 const SYSTEM_ATTRIBUTES = new Set([
   "statecode", "statuscode", "ownerid", "modifiedby", "createdby",
@@ -60,10 +60,7 @@ export function validateDestQueryActivity(
   activityNode: GraphNode,
   schemaPath?: string,
 ): { validation: ActivityValidation; warnings: string[] } | null {
-  const params = activityNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
-  if (!params) return null;
-
-  const destQuery = asNonDynamic(params.dest_query);
+  const destQuery = getActivityDestQuery(graph, activityNode);
   if (!destQuery) return null;
 
   const entityName = resolveEntityName(graph, activityNode);
@@ -138,12 +135,7 @@ export function handleValidatePipeline(
   const warnings: string[] = [];
   const activities: ActivityValidation[] = [];
 
-  const contained = graph.getOutgoing(lookup.id);
-  for (const edge of contained) {
-    if (edge.type !== EdgeType.Contains) continue;
-    const actNode = graph.getNode(edge.to);
-    if (!actNode || actNode.type !== NodeType.Activity) continue;
-
+  for (const actNode of collectPipelineActivities(graph, lookup.id)) {
     const result = validateDestQueryActivity(graph, actNode, schemaPath);
     if (!result) continue;
 

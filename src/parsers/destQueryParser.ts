@@ -40,9 +40,51 @@ export function stripSqlComments(sql: string): string {
     .join("\n");
 }
 
+/**
+ * Index of the statement's outermost SELECT keyword.
+ *
+ * The first SELECT in the text is not necessarily the one that shapes the
+ * result set: a `WITH cte AS (SELECT ...) SELECT ...` query hides its real
+ * projection behind one or more CTE bodies. CTE bodies (and subqueries) are
+ * always parenthesised, so the outermost SELECT is the first one at paren
+ * depth 0. Falls back to the first SELECT at any depth when the whole
+ * statement is wrapped in parentheses.
+ */
+function findOuterSelectIndex(sql: string): number {
+  const upper = sql.toUpperCase();
+  let depth = 0;
+  let firstAnyDepth = -1;
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+
+    // Skip string literals so quoted parens don't skew the depth count
+    if (ch === "'") {
+      i++;
+      while (i < sql.length && sql[i] !== "'") i++;
+      continue;
+    }
+
+    if (ch === "(") { depth++; continue; }
+    if (ch === ")") { depth--; continue; }
+
+    if (!upper.startsWith("SELECT", i)) continue;
+
+    const before = i > 0 ? sql[i - 1] : "";
+    if (before && /[\w$]/.test(before)) continue;
+    const after = sql[i + 6];
+    if (after && !/[\s(]/.test(after)) continue;
+
+    if (firstAnyDepth === -1) firstAnyDepth = i;
+    if (depth === 0) return i;
+  }
+
+  return firstAnyDepth;
+}
+
 export function extractSelectClause(sql: string): string | null {
   const upper = sql.toUpperCase();
-  const selectIdx = upper.indexOf("SELECT");
+  const selectIdx = findOuterSelectIndex(sql);
   if (selectIdx === -1) return null;
 
   let start = selectIdx + 6;
