@@ -164,7 +164,7 @@ export function mergeOverlayInto(target: Graph, overlay: Graph): void {
       continue;
     }
     if (target.getNode(node.id)) {
-      target.removeEdgesForNode(node.id);
+      target.removeOutgoingEdgesForNode(node.id);
     }
     target.replaceNode(node);
   }

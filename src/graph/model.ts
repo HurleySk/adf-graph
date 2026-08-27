@@ -246,6 +246,18 @@ export class Graph {
     else this.typeIndex.set(node.type, [node]);
   }
 
+  removeOutgoingEdgesForNode(id: string): void {
+    const outgoing = this.outgoing.get(id) ?? [];
+    for (const edge of outgoing) {
+      const targetIncoming = this.incoming.get(edge.to);
+      if (targetIncoming) {
+        const filtered = targetIncoming.filter((e) => e.from !== id);
+        this.incoming.set(edge.to, filtered);
+      }
+    }
+    this.outgoing.set(id, []);
+  }
+
   removeEdgesForNode(id: string): void {
     const outgoing = this.outgoing.get(id) ?? [];
     for (const edge of outgoing) {
