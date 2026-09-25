@@ -378,6 +378,24 @@ END`;
     });
   });
 
+  describe("INSERT ... VALUES", () => {
+    it("records the write without pairing it with a later SELECT", () => {
+      const sql = `
+INSERT INTO [dbo].[Seed] ([a], [b]) VALUES (1, 2), (3, 4);
+UPDATE t SET t.x = 1 FROM dbo.T t JOIN (SELECT id FROM dbo.Src) s ON s.id = t.id;`;
+      const result = parseSpBody("p_Seed", sql);
+      expect(result.writeTables).toContain("dbo.Seed");
+      expect(result.mappings.filter((m) => m.targetTable === "dbo.Seed")).toHaveLength(0);
+    });
+
+    it("parses a large VALUES seed quickly", () => {
+      const rows = Array.from({ length: 5000 }, (_, i) => `INSERT INTO dbo.Seed (a, b) VALUES (${i}, ${i});`).join("\n");
+      const start = Date.now();
+      parseSpBody("p_BigSeed", `${rows}\nUPDATE s SET s.row_hash = CONCAT(${"s.a, ".repeat(200)}s.b) FROM dbo.Seed s;`);
+      expect(Date.now() - start).toBeLessThan(2000);
+    });
+  });
+
   describe("CTEs", () => {
     it("excludes CTE names from read and write tables", () => {
       const sql = `
@@ -385,12 +403,23 @@ END`;
 [Ranked] (id, name) AS (SELECT id, name FROM P0 JOIN dbo.Roster r ON r.id = P0.id)
 INSERT INTO dbo.Matches (id, name)
 SELECT id, name FROM ranked;
-UPDATE t SET t.flag = 1 FROM dbo.Target t JOIN P0 ON P0.id = t.id;`;
+UPDATE t SET t.flag = 1 FROM dbo.Target t JOIN P0 ON P0.id = t.id JOIN dbo.Other o ON o.id = t.id;`;
       const result = parseSpBody("p_Cte", sql);
       const lower = (xs: string[]) => xs.map((x) => x.toLowerCase());
       expect(lower(result.readTables)).not.toContain("p0");
       expect(lower(result.readTables)).not.toContain("ranked");
+      expect(result.readTables).toContain("dbo.Other");
       expect(result.writeTables).toContain("dbo.Matches");
+      expect(result.writeTables).toContain("dbo.Target");
+    });
+
+    it("keeps locking hints, schema-qualified twins, and handles bracketed names with spaces", () => {
+      const sql = `
+;WITH Staff AS (SELECT id FROM dbo.Src), [My Cte] AS (SELECT id FROM Staff)
+UPDATE t SET t.flag = 1 FROM dbo.Target t WITH (NOLOCK) JOIN dbo.Staff s ON s.id = t.id JOIN [My Cte] c ON c.id = t.id;`;
+      const result = parseSpBody("p_Cte2", sql);
+      expect(result.readTables).toContain("dbo.Staff");
+      expect(result.readTables.map((x) => x.toLowerCase())).not.toContain("my cte");
       expect(result.writeTables).toContain("dbo.Target");
     });
   });

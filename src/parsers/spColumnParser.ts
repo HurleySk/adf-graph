@@ -271,7 +271,7 @@ function parseInsertSelectStatements(sql: string): StatementResult {
   let parsed = 0;
 
   const insertRegex = new RegExp(
-    `\\bINSERT\\s+INTO\\s+(${QUALIFIED_IDENT})\\s*\\(\\s*([\\s\\S]*?)\\s*\\)\\s*SELECT\\s+([\\s\\S]*?)\\s+FROM\\s+(${QUALIFIED_IDENT})`,
+    `\\bINSERT\\s+INTO\\s+(${QUALIFIED_IDENT})\\s*\\(\\s*([^()]*?)\\s*\\)\\s*SELECT\\s+([\\s\\S]*?)\\s+FROM\\s+(${QUALIFIED_IDENT})`,
     "gi"
   );
 
@@ -285,6 +285,10 @@ function parseInsertSelectStatements(sql: string): StatementResult {
     parsed++;
 
     pushPositional(mappings, match[2], match[3], sourceTable, targetTable);
+  }
+
+  for (const target of sql.matchAll(new RegExp(`\\bINSERT\\s+INTO\\s+(${QUALIFIED_IDENT})`, "gi"))) {
+    writeTables.push(normalizeTable(target[1]));
   }
 
   return { mappings, readTables, writeTables, parsed };
@@ -341,8 +345,8 @@ function parseMergeStatements(sql: string): StatementResult {
 
 function collectCteNames(sql: string): Set<string> {
   const names = new Set<string>();
-  const re = /(?:\bWITH|\)\s*,)\s*\[?(\w+)\]?\s*(?:\([^()]*\)\s*)?AS\s*\(/gi;
-  for (const m of sql.matchAll(re)) names.add(m[1].toLowerCase());
+  const re = /(?:\bWITH|\)\s*,)\s*(?:\[([^\]]+)\]|(\w+))\s*(?:\([^()]*\)\s*)?AS\s*\(/gi;
+  for (const m of sql.matchAll(re)) names.add((m[1] ?? m[2]).toLowerCase());
   return names;
 }
 
@@ -368,7 +372,7 @@ export function parseSpBody(spName: string, sql: string): SpParseResult {
 
   // Count total DML statements (standalone UPDATE, INSERT INTO, MERGE).
   // Exclude "THEN UPDATE SET" inside MERGE statements — those are handled by the MERGE parser.
-  const standaloneUpdateCount = (cleaned.match(/\bUPDATE\s+(?:\[?[^\]]*\]?\.)*\[?[^\]]*\]?\s+SET\b/gi) ?? []).length;
+  const standaloneUpdateCount = (cleaned.match(new RegExp(`\\bUPDATE\\s+${QUALIFIED_IDENT}\\s+SET\\b`, "gi")) ?? []).length;
   const insertIntoCount = (cleaned.match(/\bINSERT\s+INTO\b/gi) ?? []).length;
   const mergeCount = (cleaned.match(/\bMERGE\b/gi) ?? []).length;
   totalStatements = standaloneUpdateCount + insertIntoCount + mergeCount;
