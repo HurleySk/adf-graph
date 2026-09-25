@@ -396,6 +396,58 @@ UPDATE t SET t.x = 1 FROM dbo.T t JOIN (SELECT id FROM dbo.Src) s ON s.id = t.id
     });
   });
 
+  describe("statement boundaries and counting", () => {
+    it("does not report high confidence for unparsed UPDATE forms", () => {
+      expect(parseSpBody("p_Tmp", "UPDATE #tmp SET a = 1;").confidence).not.toBe("high");
+      expect(parseSpBody("p_Var", "UPDATE @t SET a = 1;").confidence).not.toBe("high");
+    });
+
+    it("parses UPDATE with TOP and table hints", () => {
+      const result = parseSpBody("p_Top", "UPDATE TOP (10) dbo.T WITH (ROWLOCK) SET a = s.b FROM dbo.T JOIN dbo.S s ON s.id = T.id;");
+      expect(result.writeTables).toContain("dbo.T");
+      expect(result.readTables).toContain("dbo.S");
+      expect(result.confidence).toBe("high");
+    });
+
+    it("does not pair an INSERT SELECT with a FROM in a later statement", () => {
+      const result = parseSpBody("p_NoFrom", "INSERT INTO dbo.T (a) SELECT 1; SELECT x FROM dbo.Unrelated;");
+      expect(result.mappings).toHaveLength(0);
+      expect(result.writeTables).toContain("dbo.T");
+      expect(result.readTables).not.toContain("dbo.Unrelated");
+    });
+
+    it("records reads from derived tables and subqueries in INSERT SELECT", () => {
+      const sql = `INSERT INTO dbo.Out (a) SELECT p.a FROM (SELECT a FROM dbo.Inner) p
+WHERE NOT EXISTS (SELECT 1 FROM dbo.Existing e WHERE e.a = p.a);`;
+      const result = parseSpBody("p_Derived", sql);
+      expect(result.readTables).toEqual(expect.arrayContaining(["dbo.Inner", "dbo.Existing"]));
+      expect(result.writeTables).toContain("dbo.Out");
+    });
+
+    it("skips OPENQUERY and malformed INSERT targets", () => {
+      const result = parseSpBody("p_Odd", "INSERT INTO OPENQUERY(LNK, 'x') VALUES (1); INSERT INTO db..T VALUES (1); INSERT INTO a.b.c.d VALUES (1);");
+      expect(result.writeTables).toHaveLength(0);
+    });
+
+    it("keeps MERGE WHEN clauses within their own statement", () => {
+      const sql = `
+MERGE dbo.A AS t USING dbo.S1 AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.x = s.x;
+MERGE dbo.B AS t USING dbo.S2 AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.y = s.y;`;
+      const result = parseSpBody("p_TwoMerges", sql);
+      expect(result.mappings.filter((m) => m.targetTable === "dbo.A").map((m) => m.targetColumn)).toEqual(["x"]);
+    });
+
+    it("parses many MERGE and unterminated INSERT SELECT statements quickly", () => {
+      const merges = Array.from({ length: 1000 }, (_, i) =>
+        `MERGE dbo.A${i} AS t USING dbo.S AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.x = s.x;`).join("\n");
+      const inserts = "INSERT INTO t (a, b) SELECT x, y WHERE 1 = 1;\n".repeat(20000);
+      const start = Date.now();
+      const result = parseSpBody("p_Many", merges + inserts);
+      expect(Date.now() - start).toBeLessThan(2000);
+      expect(result.mappings.filter((m) => m.targetTable === "dbo.A0")).toHaveLength(1);
+    });
+  });
+
   describe("CTEs", () => {
     it("excludes CTE names from read and write tables", () => {
       const sql = `

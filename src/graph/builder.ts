@@ -241,7 +241,13 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
       continue;
     }
 
-    const parseResult = parseSpBody(spNode.name, sqlContent);
+    let parseResult: ReturnType<typeof parseSpBody>;
+    try {
+      parseResult = parseSpBody(spNode.name, sqlContent);
+    } catch (err) {
+      warnings.push(`Failed to parse SP '${spNode.name}': ${String(err)}`);
+      continue;
+    }
     warnings.push(...parseResult.warnings);
 
     // Store confidence on SP node metadata

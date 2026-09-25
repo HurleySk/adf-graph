@@ -158,6 +158,7 @@ const STATEMENT_KEYWORDS = [
 const SET_CLAUSE_STOPS = ["WHERE", "FROM", "OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
 const FROM_CLAUSE_STOPS = ["WHERE", "OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
 const WHERE_CLAUSE_STOPS = ["OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
+const SELECT_LIST_STOPS = ["FROM", "WHERE", "GROUP", "ORDER", "UNION", "OPTION", ...STATEMENT_KEYWORDS];
 const MERGE_SET_STOPS = ["WHEN", "OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
 const NON_ALIAS_WORDS = new Set([
   "ON", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "CROSS", "APPLY", "WITH",
@@ -220,7 +221,10 @@ function parseUpdateStatements(sql: string): StatementResult {
   const writeTables: string[] = [];
   let parsed = 0;
 
-  const updateRegex = new RegExp(`\\bUPDATE\\s+(${QUALIFIED_IDENT})\\s+SET\\s+`, "gi");
+  const updateRegex = new RegExp(
+    `\\bUPDATE\\s+(?:TOP\\s*\\([^()]*\\)\\s*(?:PERCENT\\s+)?)?(${QUALIFIED_IDENT})(?:\\s+WITH\\s*\\([^()]*\\))?\\s+SET\\s+`,
+    "gi",
+  );
 
   let match: RegExpExecArray | null;
   while ((match = updateRegex.exec(sql)) !== null) {
@@ -271,24 +275,37 @@ function parseInsertSelectStatements(sql: string): StatementResult {
   let parsed = 0;
 
   const insertRegex = new RegExp(
-    `\\bINSERT\\s+INTO\\s+(${QUALIFIED_IDENT})\\s*\\(\\s*([^()]*?)\\s*\\)\\s*SELECT\\s+([\\s\\S]*?)\\s+FROM\\s+(${QUALIFIED_IDENT})`,
+    `\\bINSERT\\s+INTO\\s+(${QUALIFIED_IDENT})\\s*\\(\\s*([^()]*?)\\s*\\)\\s*SELECT\\s+`,
     "gi"
   );
+  const fromTableRegex = new RegExp(`FROM\\s+(${QUALIFIED_IDENT})(?![\\w.\\]])`, "iy");
 
   let match: RegExpExecArray | null;
   while ((match = insertRegex.exec(sql)) !== null) {
+    const selectStart = match.index + match[0].length;
+    const selectEnd = clauseEnd(sql, selectStart, SELECT_LIST_STOPS);
+    const statementEnd = clauseEnd(sql, selectEnd, WHERE_CLAUSE_STOPS);
+    readTables.push(...subqueryTables(sql.slice(selectStart, statementEnd)));
+    fromTableRegex.lastIndex = selectEnd;
+    const from = isKeywordAt(sql, selectEnd, "FROM") ? fromTableRegex.exec(sql) : null;
+    if (!from) continue;
+
     const targetTable = normalizeTable(match[1]);
-    const sourceTable = normalizeTable(match[4]);
+    const sourceTable = normalizeTable(from[1]);
 
     writeTables.push(targetTable);
     readTables.push(sourceTable);
     parsed++;
 
-    pushPositional(mappings, match[2], match[3], sourceTable, targetTable);
+    pushPositional(mappings, match[2], sql.slice(selectStart, selectEnd), sourceTable, targetTable);
   }
 
-  for (const target of sql.matchAll(new RegExp(`\\bINSERT\\s+INTO\\s+(${QUALIFIED_IDENT})`, "gi"))) {
-    writeTables.push(normalizeTable(target[1]));
+  const targetRegex = new RegExp(
+    `\\bINSERT\\s+INTO\\s+(?!OPEN(?:QUERY|ROWSET|DATASOURCE|XML)\\b)(${QUALIFIED_IDENT})(?![\\w.\\]])`,
+    "gi",
+  );
+  for (const target of sql.matchAll(targetRegex)) {
+    if (target[1].split(".").length <= 3) writeTables.push(normalizeTable(target[1]));
   }
 
   return { mappings, readTables, writeTables, parsed };
@@ -306,7 +323,7 @@ function parseMergeStatements(sql: string): StatementResult {
   let parsed = 0;
 
   const mergeRegex = new RegExp(
-    `\\bMERGE\\s+(${QUALIFIED_IDENT})\\s+(?:AS\\s+\\w+\\s+)?USING\\s+(${QUALIFIED_IDENT})\\s+(?:AS\\s+\\w+\\s+)?ON\\s+([\\s\\S]*?)(?=\\bWHEN\\b)`,
+    `\\bMERGE\\s+(${QUALIFIED_IDENT})\\s+(?:AS\\s+\\w+\\s+)?USING\\s+(${QUALIFIED_IDENT})\\s+(?:AS\\s+\\w+\\s+)?ON\\s+([^;]*?)(?=\\bWHEN\\b)`,
     "gi"
   );
 
@@ -319,8 +336,8 @@ function parseMergeStatements(sql: string): StatementResult {
     readTables.push(sourceTable);
     parsed++;
 
-    // Get the rest of the MERGE statement after the ON clause
-    const restOfMerge = sql.slice(match.index + match[0].length);
+    const bodyStart = match.index + match[0].length;
+    const restOfMerge = sql.slice(bodyStart, clauseEnd(sql, bodyStart, ["MERGE"]));
 
     // Parse WHEN MATCHED THEN UPDATE SET assignments
     const whenMatchedRegex = /\bWHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+/gi;
@@ -372,7 +389,9 @@ export function parseSpBody(spName: string, sql: string): SpParseResult {
 
   // Count total DML statements (standalone UPDATE, INSERT INTO, MERGE).
   // Exclude "THEN UPDATE SET" inside MERGE statements — those are handled by the MERGE parser.
-  const standaloneUpdateCount = (cleaned.match(new RegExp(`\\bUPDATE\\s+${QUALIFIED_IDENT}\\s+SET\\b`, "gi")) ?? []).length;
+  const standaloneUpdateCount = [
+    ...cleaned.replace(/\[[^\]]*\]/g, "[]").matchAll(/(\bTHEN\s+)?\bUPDATE\b(?!\s*\(|\s+STATISTICS\b)/gi),
+  ].filter((m) => m[1] === undefined).length;
   const insertIntoCount = (cleaned.match(/\bINSERT\s+INTO\b/gi) ?? []).length;
   const mergeCount = (cleaned.match(/\bMERGE\b/gi) ?? []).length;
   totalStatements = standaloneUpdateCount + insertIntoCount + mergeCount;
@@ -382,7 +401,7 @@ export function parseSpBody(spName: string, sql: string): SpParseResult {
     parseInsertSelectStatements(cleaned),
     parseMergeStatements(cleaned),
   ]) {
-    allMappings.push(...result.mappings);
+    for (const mapping of result.mappings) allMappings.push(mapping);
     result.readTables.forEach((t) => readTables.add(t));
     result.writeTables.forEach((t) => writeTables.add(t));
     parsedStatements += result.parsed;
