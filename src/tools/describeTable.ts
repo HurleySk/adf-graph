@@ -1,6 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { makeNodeId } from "../utils/nodeId.js";
-import { parseActivityId } from "../utils/nodeId.js";
+import { makeNodeId, parseActivityId, parseNodeId } from "../utils/nodeId.js";
+import { resolveNode, splitQualifiedName } from "./toolUtils.js";
 
 interface ColumnInfo {
   name: string;
@@ -33,10 +33,11 @@ export function handleDescribeTable(
   graph: Graph,
   table: string,
 ): DescribeTableResult {
-  const schema = table.includes(".") ? table.split(".")[0] : "dbo";
-  const tableName = table.includes(".") ? table.split(".").slice(1).join(".") : table;
-  const tableId = makeNodeId(NodeType.Table, `${schema}.${tableName}`);
-  const node = graph.getNode(tableId);
+  const resolvedId = resolveNode(graph, NodeType.Table, table);
+  const qualified = resolvedId ? parseNodeId(resolvedId).name : table.includes(".") ? table : `dbo.${table}`;
+  const [schema, tableName] = splitQualifiedName(qualified);
+  const tableId = resolvedId ?? makeNodeId(NodeType.Table, qualified);
+  const node = resolvedId ? graph.getNode(resolvedId) : undefined;
 
   if (!node) {
     return {

@@ -1,5 +1,5 @@
 import { GraphNode, GraphEdge, NodeType } from "../graph/model.js";
-import { ParseResult, extractTablesFromSql } from "./parseResult.js";
+import { ParseResult } from "./parseResult.js";
 import { parseActivity } from "./activities/index.js";
 import { makePipelineId } from "../utils/nodeId.js";
 

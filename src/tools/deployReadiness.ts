@@ -1,7 +1,7 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { hasEmptyDefault, getParameterDefs } from "../graph/nodeMetadata.js";
+import { Graph, EdgeType } from "../graph/model.js";
 import { CONNECTION_PROPERTY_KEYS } from "../utils/connectionProperties.js";
-import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
-import { findExecutePipelineActivities } from "../graph/traversalUtils.js";
+import { findChildPipelineCalls } from "../graph/traversalUtils.js";
 import { parseNodeId } from "../utils/nodeId.js";
 import { lookupPipelineNode } from "./toolUtils.js";
 
@@ -166,9 +166,7 @@ function checkParameters(
 
   for (const param of paramDefs) {
     const isSupplied = suppliedParams !== null && param.name in suppliedParams;
-    const hasEmptyDefault = param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined;
-
-    if (hasEmptyDefault && !isSupplied) {
+    if (hasEmptyDefault(param) && !isSupplied) {
       issues.push({
         pipeline: node.name,
         parameter: param.name,
@@ -178,15 +176,8 @@ function checkParameters(
     }
   }
 
-  // Find ExecutePipeline activities and recurse into child pipelines
-  const executesEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Executes);
-  const execActivities = findExecutePipelineActivities(graph, pipelineId);
-
-  for (const execEdge of executesEdges) {
-    const childPipelineName = parseNodeId(execEdge.to).name;
-    const actNode = execActivities.find((a) => getActivityMetadata(a).executedPipeline === childPipelineName);
-    const childParams = actNode ? getActivityMetadata(actNode).pipelineParameters : undefined;
-    checkParameters(graph, execEdge.to, childParams ?? null, issues, visited);
+  for (const call of findChildPipelineCalls(graph, pipelineId)) {
+    checkParameters(graph, call.childId, call.suppliedParams, issues, visited);
   }
 }
 

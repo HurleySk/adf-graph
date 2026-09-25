@@ -1,5 +1,6 @@
 import { Graph, EdgeType } from "../graph/model.js";
 import { makeNodeId, parseActivityId } from "../utils/nodeId.js";
+import { resolveNode } from "./toolUtils.js";
 
 export interface ConsumerEntry {
   pipeline: string;
@@ -46,7 +47,7 @@ export function handleFindConsumers(
   target: string,
   targetType: string,
 ): FindConsumersResult {
-  const nodeId = makeNodeId(targetType, target);
+  const nodeId = resolveNode(graph, targetType, target) ?? makeNodeId(targetType, target);
   const incoming = graph.getIncoming(nodeId);
 
   const consumers: ConsumerEntry[] = [];

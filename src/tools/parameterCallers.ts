@@ -1,5 +1,5 @@
+import { hasEmptyDefault, getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { findExecutePipelineActivities } from "../graph/traversalUtils.js";
 import { parseActivityId } from "../utils/nodeId.js";
 import { lookupPipelineNode } from "./toolUtils.js";
@@ -94,8 +94,6 @@ export function handleParameterCallers(
     if (parameterFilter && param.name.toLowerCase() !== parameterFilter.toLowerCase()) continue;
 
     const callers = callerMap.get(param.name) ?? [];
-    const hasEmptyDefault =
-      param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined;
     const hasConcreteSupplier = callers.some((c) => !c.isExpression);
 
     parameters.push({
@@ -103,7 +101,7 @@ export function handleParameterCallers(
       type: param.type ?? "String",
       defaultValue: param.defaultValue,
       callers,
-      hasDeadEnd: hasEmptyDefault && !hasConcreteSupplier,
+      hasDeadEnd: hasEmptyDefault(param) && !hasConcreteSupplier,
     });
   }
 

@@ -1,5 +1,6 @@
+import { inferNodeType, makeAttributeId, makeEntityId, parseNodeId } from "../utils/nodeId.js";
+import { hasEmptyDefault, isStub, getParameterDefs } from "../graph/nodeMetadata.js";
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { isStub, getParameterDefs } from "../graph/nodeMetadata.js";
 import { normalizeUri, extractDvOrg } from "../utils/connectionProperties.js";
 import { resolveDatasetLinkedServices } from "./toolUtils.js";
 
@@ -104,7 +105,7 @@ export function handleValidate(
       case NodeType.Pipeline: {
         const params = getParameterDefs(node);
         for (const param of params) {
-          if (param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined) {
+          if (hasEmptyDefault(param)) {
             issues.push({
               severity: "warning",
               category: "empty_param_default",
@@ -179,8 +180,8 @@ export function handleValidate(
         // Schema attribute validation
         if (schemaPath) {
           const writesToEntities = outgoing
-            .filter((e) => e.type === EdgeType.WritesTo && e.to.startsWith("dataverse_entity:"))
-            .map((e) => e.to.replace("dataverse_entity:", ""));
+            .filter((e) => e.type === EdgeType.WritesTo && inferNodeType(e.to) === NodeType.DataverseEntity)
+            .map((e) => parseNodeId(e.to).name);
 
           if (writesToEntities.length > 0) {
             const mapColumnEdges = outgoing.filter((e) => e.type === EdgeType.MapsColumn);
@@ -188,14 +189,13 @@ export function handleValidate(
               const sinkCol = edge.metadata.sinkColumn as string | undefined;
               if (!sinkCol) continue;
               for (const entityName of writesToEntities) {
-                const attrNodeId = `dataverse_attribute:${entityName}.${sinkCol}`;
-                if (!graph.getNode(attrNodeId)) {
+                if (!graph.getNode(makeAttributeId(entityName, sinkCol))) {
                   issues.push({
                     severity: "error",
                     category: "missing_dataverse_attribute",
                     message: `Activity '${node.name}' maps to attribute '${sinkCol}' on entity '${entityName}', but that attribute does not exist in the schema`,
                     nodeId: node.id,
-                    relatedNodeId: `dataverse_entity:${entityName}`,
+                    relatedNodeId: makeEntityId(entityName),
                   });
                 }
               }

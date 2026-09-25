@@ -1,6 +1,5 @@
-import { Graph, GraphNode } from "../graph/model.js";
-import { lookupPipelineNode, resolveEntityName, getEntityAttributes, getActivityDestQuery, resolveDestQueryDefaults } from "./toolUtils.js";
-import { collectPipelineActivities } from "../graph/traversalUtils.js";
+import { Graph } from "../graph/model.js";
+import { lookupPipelineNode, getEntityAttributes, iterDestQueryTargets, type DestQueryTarget } from "./toolUtils.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
 
 const SYSTEM_ATTRIBUTES = new Set([
@@ -55,64 +54,26 @@ function classifyAlias(
   return { alias, status: entityAttrs.has(aliasLower) ? "valid" : "invalid" };
 }
 
-function validateDestQueryActivity(
+function validateTarget(
   graph: Graph,
-  activityNode: GraphNode,
+  target: DestQueryTarget,
   schemaPath?: string,
 ): { validation: ActivityValidation; warnings: string[] } | null {
-  const destQuery = getActivityDestQuery(graph, activityNode);
-  if (!destQuery) return null;
+  if (!target.entityName) return null;
 
-  const entityName = resolveEntityName(graph, activityNode);
-  if (!entityName) return null;
-
-  const warnings: string[] = [];
-  const parseResult = extractDestQueryAliases(destQuery);
-  warnings.push(...parseResult.warnings);
-
-  const entityAttrs = getEntityAttributes(graph, entityName, schemaPath);
-  const entityFound = entityAttrs !== null;
-  const columns = parseResult.aliases.map((a) => classifyAlias(a.alias, entityAttrs));
+  const parseResult = extractDestQueryAliases(target.destQuery);
+  const entityAttrs = getEntityAttributes(graph, target.entityName, schemaPath);
 
   return {
     validation: {
-      activityId: activityNode.id,
-      activityName: activityNode.name,
-      entityName,
-      entityFound,
-      columns,
-      destQuery,
+      activityId: target.id,
+      activityName: target.name,
+      entityName: target.entityName,
+      entityFound: entityAttrs !== null,
+      columns: parseResult.aliases.map((a) => classifyAlias(a.alias, entityAttrs)),
+      destQuery: target.destQuery,
     },
-    warnings,
-  };
-}
-
-function validatePipelineDefaults(
-  graph: Graph,
-  pipelineNode: GraphNode,
-  schemaPath?: string,
-): { validation: ActivityValidation; warnings: string[] } | null {
-  const defaults = resolveDestQueryDefaults(pipelineNode);
-  if (!defaults) return null;
-
-  const warnings: string[] = [];
-  const parseResult = extractDestQueryAliases(defaults.destQuery);
-  warnings.push(...parseResult.warnings);
-
-  const entityAttrs = getEntityAttributes(graph, defaults.entityName, schemaPath);
-  const entityFound = entityAttrs !== null;
-  const columns = parseResult.aliases.map((a) => classifyAlias(a.alias, entityAttrs));
-
-  return {
-    validation: {
-      activityId: defaults.pipelineId,
-      activityName: `${defaults.pipelineName} (parameter default)`,
-      entityName: defaults.entityName,
-      entityFound,
-      columns,
-      destQuery: defaults.destQuery,
-    },
-    warnings,
+    warnings: parseResult.warnings,
   };
 }
 
@@ -122,7 +83,7 @@ export function handleValidatePipeline(
   schemaPath?: string,
 ): ValidatePipelineResult {
   const lookup = lookupPipelineNode(graph, pipeline);
-  if (lookup.error) {
+  if (lookup.error !== undefined) {
     return {
       pipeline,
       activities: [],
@@ -135,18 +96,12 @@ export function handleValidatePipeline(
   const warnings: string[] = [];
   const activities: ActivityValidation[] = [];
 
-  for (const actNode of collectPipelineActivities(graph, lookup.id)) {
-    const result = validateDestQueryActivity(graph, actNode, schemaPath);
+  for (const target of iterDestQueryTargets(graph, lookup.node)) {
+    const result = validateTarget(graph, target, schemaPath);
     if (!result) continue;
 
     activities.push(result.validation);
     warnings.push(...result.warnings);
-  }
-
-  const defaultResult = validatePipelineDefaults(graph, lookup.node!, schemaPath);
-  if (defaultResult) {
-    activities.push(defaultResult.validation);
-    warnings.push(...defaultResult.warnings);
   }
 
   const totalColumns = activities.reduce((sum, a) => sum + a.columns.length, 0);

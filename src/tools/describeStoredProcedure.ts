@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { makeNodeId } from "../utils/nodeId.js";
-import { parseActivityId } from "../utils/nodeId.js";
+import { makeNodeId, parseActivityId, parseNodeId } from "../utils/nodeId.js";
+import { resolveNode, splitQualifiedName } from "./toolUtils.js";
 
 interface CallerInfo {
   pipeline: string;
@@ -36,10 +36,11 @@ export function handleDescribeStoredProcedure(
   name: string,
   depth: "summary" | "full",
 ): DescribeStoredProcedureResult {
-  const schema = name.includes(".") ? name.split(".")[0] : "dbo";
-  const spName = name.includes(".") ? name.split(".").slice(1).join(".") : name;
-  const spId = makeNodeId(NodeType.StoredProcedure, `${schema}.${spName}`);
-  const node = graph.getNode(spId);
+  const resolvedId = resolveNode(graph, NodeType.StoredProcedure, name);
+  const qualified = resolvedId ? parseNodeId(resolvedId).name : name.includes(".") ? name : `dbo.${name}`;
+  const [schema, spName] = splitQualifiedName(qualified);
+  const spId = resolvedId ?? makeNodeId(NodeType.StoredProcedure, qualified);
+  const node = resolvedId ? graph.getNode(resolvedId) : undefined;
 
   if (!node) {
     return {

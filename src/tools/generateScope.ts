@@ -1,7 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode } from "./toolUtils.js";
 import { findExecutePipelineActivities, collectPipelineActivities } from "../graph/traversalUtils.js";
-import { parseNodeId } from "../utils/nodeId.js";
 
 export interface PipelineInfo {
   children: string[];
@@ -71,7 +70,7 @@ export function handleGenerateScope(
       // Find ExecutePipeline activities → follow Executes edges to child pipelines
       const execActivities = findExecutePipelineActivities(graph, pipelineId);
       for (const actNode of execActivities) {
-        const execEdges = graph.getOutgoing(actNode.id).filter((e) => e.type === EdgeType.Executes);
+        const execEdges = graph.getOutgoing(actNode.id, EdgeType.Executes);
         for (const edge of execEdges) {
           const childNode = graph.getNode(edge.to);
           if (!childNode || childNode.type !== NodeType.Pipeline) continue;
@@ -86,7 +85,7 @@ export function handleGenerateScope(
 
       // Also follow direct Executes edges from the pipeline node itself
       // (some graphs may have pipeline→pipeline edges directly)
-      const directExecEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Executes);
+      const directExecEdges = graph.getOutgoing(pipelineId, EdgeType.Executes);
       for (const edge of directExecEdges) {
         const childNode = graph.getNode(edge.to);
         if (!childNode || childNode.type !== NodeType.Pipeline) continue;

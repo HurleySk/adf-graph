@@ -1,4 +1,5 @@
-import { Graph, NodeType, EdgeType, type GraphEdge } from "../graph/model.js";
+import { findRootOrchestrators } from "./findOrchestrators.js";
+import { Graph, EdgeType, type GraphEdge } from "../graph/model.js";
 import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseNodeId } from "../utils/nodeId.js";
 import { lookupPipelineNode, resolveDatasetLinkedServices } from "./toolUtils.js";
@@ -65,37 +66,16 @@ export function handleDescribePipeline(
     return {
       pipeline,
       summary: { name: pipeline, parameters: [], childPipelines: [], rootOrchestrators: [] },
-      error: `Pipeline '${pipeline}' not found in graph`,
+      error: lookup.error,
     };
   }
   const pipelineId = lookup.id;
   const pipelineNode = lookup.node;
 
-  // Child pipelines: outgoing executes edges
-  const outgoing = graph.getOutgoing(pipelineId);
-  const childPipelines = outgoing
-    .filter((e) => e.type === EdgeType.Executes)
+  const childPipelines = graph
+    .getOutgoing(pipelineId, EdgeType.Executes)
     .map((e) => parseNodeId(e.to).name);
-
-  // Root orchestrators: traverse upstream, find pipelines with no incoming executes
-  const upstream = graph.traverseUpstream(pipelineId);
-  const rootOrchestrators: string[] = [];
-  for (const result of upstream) {
-    if (result.node.type !== NodeType.Pipeline) continue;
-    const incomingExecutes = graph.getIncoming(result.node.id).filter(
-      (e) => e.type === EdgeType.Executes,
-    );
-    if (incomingExecutes.length === 0) {
-      rootOrchestrators.push(result.node.name);
-    }
-  }
-  // Also check if the pipeline itself is a root
-  const selfIncoming = graph.getIncoming(pipelineId).filter(
-    (e) => e.type === EdgeType.Executes,
-  );
-  if (selfIncoming.length === 0 && !rootOrchestrators.includes(pipeline)) {
-    rootOrchestrators.unshift(pipeline);
-  }
+  const rootOrchestrators = findRootOrchestrators(graph, pipelineId);
 
   const parameters = getParameterDefs(pipelineNode);
 

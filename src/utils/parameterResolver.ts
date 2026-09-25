@@ -1,4 +1,4 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { Graph } from "../graph/model.js";
 import type { GraphNode } from "../graph/model.js";
 import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { asString, asNonDynamic } from "./expressionValue.js";

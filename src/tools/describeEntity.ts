@@ -1,5 +1,5 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { loadEntityDetail } from "../parsers/dataverseSchema.js";
+import { getEntityDetail } from "./toolUtils.js";
+import { Graph, EdgeType } from "../graph/model.js";
 import { makeEntityId } from "../utils/nodeId.js";
 
 interface AttributeSummary {
@@ -58,7 +58,7 @@ export function handleDescribeEntity(
   }
 
   // Get attributes from HasAttribute edges
-  const attrEdges = graph.getOutgoing(nodeId).filter((e) => e.type === EdgeType.HasAttribute);
+  const attrEdges = graph.getOutgoing(nodeId, EdgeType.HasAttribute);
   let attributes: AttributeSummary[] = attrEdges.map((e) => {
     const attrNode = graph.getNode(e.to);
     const attrName = attrNode?.name.split(".").pop() ?? e.to.split(".").pop() ?? e.to;
@@ -66,8 +66,8 @@ export function handleDescribeEntity(
   });
 
   // At full depth, enrich with per-entity file detail
-  if (depth === "full" && schemaPath && node.metadata.schemaFile) {
-    const detail = loadEntityDetail(schemaPath, node.metadata.schemaFile as string);
+  if (depth === "full") {
+    const detail = getEntityDetail(graph, entity, schemaPath);
     if (detail) {
       attributes = detail.attributes.map((a) => ({
         name: a.logicalName,

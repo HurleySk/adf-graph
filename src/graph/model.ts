@@ -90,12 +90,14 @@ export class Graph {
     this.incoming.get(edge.to)!.push(edge);
   }
 
-  getOutgoing(id: string): GraphEdge[] {
-    return this.outgoing.get(id) ?? [];
+  getOutgoing(id: string, type?: EdgeType): GraphEdge[] {
+    const edges = this.outgoing.get(id) ?? [];
+    return type === undefined ? edges : edges.filter((e) => e.type === type);
   }
 
-  getIncoming(id: string): GraphEdge[] {
-    return this.incoming.get(id) ?? [];
+  getIncoming(id: string, type?: EdgeType): GraphEdge[] {
+    const edges = this.incoming.get(id) ?? [];
+    return type === undefined ? edges : edges.filter((e) => e.type === type);
   }
 
   getNodesByType(type: NodeType): GraphNode[] {

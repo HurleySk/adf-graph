@@ -1,11 +1,10 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
 import { collectPipelineActivities } from "../graph/traversalUtils.js";
-import { lookupPipelineNode, resolveDestQueryDefaults, resolveActivityParams, getTableEdges } from "./toolUtils.js";
+import { lookupPipelineNode, resolveDestQueryDefaults, resolveActivityParams, getTableEdges, resolveNode } from "./toolUtils.js";
 import { detectCdcPattern, classifyStagingRole, isCdcPipeline, type CdcPipelineInfo, type StagingRole } from "../utils/cdcPatterns.js";
 import { extractAllTablesFromSql } from "../parsers/parseResult.js";
 import { extractWhereClause } from "../parsers/sqlWhereParser.js";
-import { makeTableId } from "../utils/nodeId.js";
 
 export type StagingPopulationRole = StagingRole | "manual_inclusion" | "dv_mirror";
 
@@ -192,9 +191,7 @@ export function handleStagingPopulation(
     const usage = findTableUsage(graph, simpleName);
 
     // Check if table exists in graph
-    const tableId = makeTableId("dbo", simpleName);
-    const altId = `table:${tableName}`;
-    if (!graph.getNode(tableId) && !graph.getNode(altId)) {
+    if (!resolveNode(graph, NodeType.Table, tableName)) {
       unmappedTables.push(tableName);
     }
 

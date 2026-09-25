@@ -1,7 +1,7 @@
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
-import { makeNodeId, makeEntityId, makePipelineId, makeTableId, parseActivityId } from "../utils/nodeId.js";
+import { makeNodeId, makeEntityId, makePipelineId, parseActivityId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
-import { loadEntityDetail } from "../parsers/dataverseSchema.js";
+import { loadEntityDetail, type EntityDetail } from "../parsers/dataverseSchema.js";
 import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
 import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { resolveChildParameters } from "../utils/parameterResolver.js";
@@ -85,9 +85,7 @@ export function resolveEntityName(
   const written = getWrittenEntity(graph, activityNode.id);
   if (written) return written;
 
-  const outgoing = graph.getOutgoing(activityNode.id);
-  for (const edge of outgoing) {
-    if (edge.type !== EdgeType.Executes) continue;
+  for (const edge of graph.getOutgoing(activityNode.id, EdgeType.Executes)) {
     const childPipeline = graph.getNode(edge.to);
     if (!childPipeline) continue;
 
@@ -111,9 +109,7 @@ export function getEntityAttributes(
 
   const attrs = new Set<string>();
 
-  const outgoing = graph.getOutgoing(entityNodeId);
-  for (const edge of outgoing) {
-    if (edge.type !== EdgeType.HasAttribute) continue;
+  for (const edge of graph.getOutgoing(entityNodeId, EdgeType.HasAttribute)) {
     const attrNode = graph.getNode(edge.to);
     if (attrNode) {
       const name = attrNode.name.includes(".") ? attrNode.name.split(".").pop()! : attrNode.name;
@@ -121,16 +117,18 @@ export function getEntityAttributes(
     }
   }
 
-  if (schemaPath && entityNode.metadata.schemaFile) {
-    const detail = loadEntityDetail(schemaPath, entityNode.metadata.schemaFile as string);
-    if (detail) {
-      for (const attr of detail.attributes) {
-        attrs.add(attr.logicalName.toLowerCase());
-      }
-    }
+  const detail = getEntityDetail(graph, entityName, schemaPath);
+  for (const attr of detail?.attributes ?? []) {
+    attrs.add(attr.logicalName.toLowerCase());
   }
 
   return attrs;
+}
+
+export function getEntityDetail(graph: Graph, entityName: string, schemaPath?: string): EntityDetail | null {
+  if (!schemaPath) return null;
+  const schemaFile = graph.getNode(makeEntityId(entityName))?.metadata.schemaFile as string | undefined;
+  return schemaFile ? loadEntityDetail(schemaPath, schemaFile) : null;
 }
 
 export function getWrittenEntity(graph: Graph, activityId: string): string | null {
@@ -169,26 +167,70 @@ export function resolveDestQueryDefaults(
   };
 }
 
-export function resolveEntityOrTableNode(graph: Graph, entity: string): string | null {
-  let nodeId = makeEntityId(entity);
-  if (graph.getNode(nodeId)) return nodeId;
+const SCHEMA_QUALIFIED_TYPES = new Set<string>([NodeType.Table, NodeType.StoredProcedure]);
 
-  nodeId = makeNodeId(NodeType.Table, entity);
-  if (graph.getNode(nodeId)) return nodeId;
+export function resolveNode(graph: Graph, type: string, name: string): string | null {
+  const exactId = makeNodeId(type, name);
+  if (graph.getNode(exactId)) return exactId;
 
-  nodeId = makeNodeId(NodeType.Table, `dbo.${entity}`);
-  if (graph.getNode(nodeId)) return nodeId;
+  const qualified = SCHEMA_QUALIFIED_TYPES.has(type);
+  if (qualified && !name.includes(".")) {
+    const dboId = makeNodeId(type, `dbo.${name}`);
+    if (graph.getNode(dboId)) return dboId;
+  }
 
-  const entityLower = entity.toLowerCase();
-  const tableNodes = graph.getNodesByType(NodeType.Table);
-  const match = tableNodes.find((n) => {
-    const idSuffix = n.id.slice("table:".length);
-    if (idSuffix.toLowerCase() === entityLower) return true;
-    const dotIdx = idSuffix.indexOf(".");
-    if (dotIdx >= 0 && idSuffix.slice(dotIdx + 1).toLowerCase() === entityLower) return true;
-    return false;
+  const lower = name.toLowerCase();
+  const match = graph.getNodesByType(type as NodeType).find((n) => {
+    const suffix = n.id.slice(type.length + 1).toLowerCase();
+    if (suffix === lower) return true;
+    const dotIdx = suffix.indexOf(".");
+    return qualified && dotIdx >= 0 && suffix.slice(dotIdx + 1) === lower;
   });
   return match?.id ?? null;
+}
+
+export function splitQualifiedName(qualified: string): [schema: string, name: string] {
+  const dotIdx = qualified.indexOf(".");
+  return dotIdx === -1 ? ["dbo", qualified] : [qualified.slice(0, dotIdx), qualified.slice(dotIdx + 1)];
+}
+
+export interface DestQueryTarget {
+  id: string;
+  name: string;
+  entityName: string | null;
+  destQuery: string;
+  isDefault: boolean;
+}
+
+export function* iterDestQueryTargets(graph: Graph, pipelineNode: GraphNode): Generator<DestQueryTarget> {
+  for (const actNode of collectPipelineActivities(graph, pipelineNode.id)) {
+    const destQuery = getActivityDestQuery(graph, actNode);
+    if (!destQuery) continue;
+    yield {
+      id: actNode.id,
+      name: actNode.name,
+      entityName: resolveEntityName(graph, actNode),
+      destQuery,
+      isDefault: false,
+    };
+  }
+
+  const defaults = resolveDestQueryDefaults(pipelineNode);
+  if (defaults) {
+    yield {
+      id: defaults.pipelineId,
+      name: `${defaults.pipelineName} (parameter default)`,
+      entityName: defaults.entityName,
+      destQuery: defaults.destQuery,
+      isDefault: true,
+    };
+  }
+}
+
+export function resolveEntityOrTableNode(graph: Graph, entity: string): string | null {
+  const entityId = makeEntityId(entity);
+  if (graph.getNode(entityId)) return entityId;
+  return resolveNode(graph, NodeType.Table, entity);
 }
 
 export function resolveActivityParams(graph: Graph, activityNode: GraphNode): Record<string, unknown> {
@@ -218,8 +260,7 @@ export function resolveDatasetLinkedServices(
   for (const dsId of datasetIds) {
     const dsNode = graph.getNode(dsId);
     if (!dsNode) continue;
-    for (const edge of graph.getOutgoing(dsId)) {
-      if (edge.type !== EdgeType.UsesLinkedService) continue;
+    for (const edge of graph.getOutgoing(dsId, EdgeType.UsesLinkedService)) {
       const lsNode = graph.getNode(edge.to);
       if (!lsNode) continue;
       const cp = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
@@ -249,13 +290,8 @@ export interface TableEdgeInfo {
 }
 
 export function getTableEdges(graph: Graph, tableName: string): TableEdgeInfo[] {
-  let tableId = makeTableId("dbo", tableName);
-  let node = graph.getNode(tableId);
-  if (!node) {
-    tableId = `table:${tableName}`;
-    node = graph.getNode(tableId);
-  }
-  if (!node) return [];
+  const tableId = resolveNode(graph, NodeType.Table, tableName);
+  if (!tableId) return [];
 
   const results: TableEdgeInfo[] = [];
   const incoming = graph.getIncoming(tableId);

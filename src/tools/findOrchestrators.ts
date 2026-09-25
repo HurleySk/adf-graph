@@ -1,6 +1,5 @@
 import { Graph, EdgeType, NodeType } from "../graph/model.js";
 import { lookupPipelineNode } from "./toolUtils.js";
-import { parseNodeId } from "../utils/nodeId.js";
 
 export interface AncestryChain {
   root: string;
@@ -13,6 +12,21 @@ export interface OrchestratorAncestryResult {
   isRoot: boolean;
   ancestors: AncestryChain[];
   error?: string;
+}
+
+export function findRootOrchestrators(graph: Graph, pipelineId: string): string[] {
+  const roots: string[] = [];
+  for (const result of graph.traverseUpstream(pipelineId)) {
+    if (result.node.type !== NodeType.Pipeline) continue;
+    if (graph.getIncoming(result.node.id, EdgeType.Executes).length === 0) {
+      roots.push(result.node.name);
+    }
+  }
+  const self = graph.getNode(pipelineId);
+  if (self && graph.getIncoming(pipelineId, EdgeType.Executes).length === 0 && !roots.includes(self.name)) {
+    roots.unshift(self.name);
+  }
+  return roots;
 }
 
 /**
@@ -38,8 +52,7 @@ export function handleFindOrchestrators(
 
   // Check if the pipeline itself is a root (no incoming Executes edges)
   const incomingExecutes = graph
-    .getIncoming(targetId)
-    .filter((e) => e.type === EdgeType.Executes);
+    .getIncoming(targetId, EdgeType.Executes);
 
   if (incomingExecutes.length === 0) {
     return {
@@ -55,8 +68,7 @@ export function handleFindOrchestrators(
 
   function dfs(currentId: string, path: string[], visited: Set<string>): void {
     const incoming = graph
-      .getIncoming(currentId)
-      .filter((e) => e.type === EdgeType.Executes);
+      .getIncoming(currentId, EdgeType.Executes);
 
     if (incoming.length === 0) {
       // currentId is a root — path is [target, ..., root], reverse to get root → target

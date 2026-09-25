@@ -147,7 +147,6 @@ function parseConditions(whereText: string, depthMap: Int16Array): FilterConditi
 }
 
 function parseOneCondition(text: string, connector: string): FilterCondition {
-  const upper = text.toUpperCase().trim();
 
   // Try common patterns: col OP value
   const patterns: Array<{ regex: RegExp; opName: string }> = [

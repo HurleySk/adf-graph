@@ -1,3 +1,4 @@
+import { parseNodeId } from "../utils/nodeId.js";
 import { Graph, GraphNode, NodeType, EdgeType } from "./model.js";
 import { getActivityMetadata } from "./nodeMetadata.js";
 
@@ -28,8 +29,7 @@ export function collectContainedActivities(graph: Graph, rootId: string): Contai
   const visited = new Set<string>([rootId]);
 
   function walk(parentId: string, parent: GraphNode | undefined, depth: number): void {
-    for (const edge of graph.getOutgoing(parentId)) {
-      if (edge.type !== EdgeType.Contains) continue;
+    for (const edge of graph.getOutgoing(parentId, EdgeType.Contains)) {
       if (visited.has(edge.to)) continue;
       const node = graph.getNode(edge.to);
       if (!node || node.type !== NodeType.Activity) continue;
@@ -59,4 +59,23 @@ export function findExecutePipelineActivities(graph: Graph, pipelineId: string):
   return collectPipelineActivities(graph, pipelineId).filter(
     (n) => getActivityMetadata(n).activityType === "ExecutePipeline",
   );
+}
+
+export interface ChildPipelineCall {
+  childId: string;
+  activity?: GraphNode;
+  suppliedParams: Record<string, unknown> | null;
+}
+
+export function findChildPipelineCalls(graph: Graph, pipelineId: string): ChildPipelineCall[] {
+  const execActivities = findExecutePipelineActivities(graph, pipelineId);
+  return graph.getOutgoing(pipelineId, EdgeType.Executes).map((edge) => {
+    const childName = parseNodeId(edge.to).name;
+    const activity = execActivities.find((a) => getActivityMetadata(a).executedPipeline === childName);
+    return {
+      childId: edge.to,
+      activity,
+      suppliedParams: activity ? getActivityMetadata(activity).pipelineParameters ?? null : null,
+    };
+  });
 }

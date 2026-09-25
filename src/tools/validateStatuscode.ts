@@ -1,8 +1,6 @@
 import { Graph } from "../graph/model.js";
-import { lookupPipelineNode, resolveEntityName, getActivityDestQuery, resolveDestQueryDefaults } from "./toolUtils.js";
-import { collectPipelineActivities } from "../graph/traversalUtils.js";
-import { makeEntityId } from "../utils/nodeId.js";
-import { loadEntityDetail, type OptionSetValue } from "../parsers/dataverseSchema.js";
+import { lookupPipelineNode, iterDestQueryTargets, getEntityDetail } from "./toolUtils.js";
+import { type OptionSetValue } from "../parsers/dataverseSchema.js";
 import {
   extractDestQueryAliases,
   extractCaseValues,
@@ -57,21 +55,12 @@ function validateStatusAliases(
     let validOptionSetValues: OptionSetValue[] = [];
     let optionSetAvailable = false;
 
-    if (schemaPath) {
-      const entityNodeId = makeEntityId(entityName);
-      const entityNode = graph.getNode(entityNodeId);
-      if (entityNode?.metadata.schemaFile) {
-        const detail = loadEntityDetail(schemaPath, entityNode.metadata.schemaFile as string);
-        if (detail) {
-          const attr = detail.attributes.find(
-            (a) => a.logicalName === alias.alias.toLowerCase()
-          );
-          if (attr?.optionSet) {
-            optionSetAvailable = true;
-            validOptionSetValues = attr.optionSet;
-          }
-        }
-      }
+    const attr = getEntityDetail(graph, entityName, schemaPath)?.attributes.find(
+      (a) => a.logicalName === alias.alias.toLowerCase()
+    );
+    if (attr?.optionSet) {
+      optionSetAvailable = true;
+      validOptionSetValues = attr.optionSet;
     }
 
     const validSet = new Set(validOptionSetValues.map((v) => v.value));
@@ -100,7 +89,7 @@ export function handleValidateStatuscode(
   schemaPath?: string,
 ): ValidateStatusCodeResult {
   const lookup = lookupPipelineNode(graph, pipeline);
-  if (lookup.error) {
+  if (lookup.error !== undefined) {
     return {
       pipeline,
       validations: [],
@@ -113,34 +102,17 @@ export function handleValidateStatuscode(
   const warnings: string[] = [];
   const validations: StatusCodeValidation[] = [];
 
-  for (const actNode of collectPipelineActivities(graph, lookup.id)) {
-    const destQuery = getActivityDestQuery(graph, actNode);
-    if (!destQuery) continue;
-
-    const entityName = resolveEntityName(graph, actNode);
-    if (!entityName) {
-      warnings.push(`Activity '${actNode.name}': could not resolve target entity`);
+  for (const target of iterDestQueryTargets(graph, lookup.node)) {
+    if (!target.entityName) {
+      warnings.push(`Activity '${target.name}': could not resolve target entity`);
       continue;
     }
 
-    const parseResult = extractDestQueryAliases(destQuery);
+    const parseResult = extractDestQueryAliases(target.destQuery);
     warnings.push(...parseResult.warnings);
 
     validations.push(
-      ...validateStatusAliases(graph, parseResult.aliases, entityName, actNode.id, actNode.name, schemaPath)
-    );
-  }
-
-  const defaults = resolveDestQueryDefaults(lookup.node!);
-  if (defaults) {
-    const parseResult = extractDestQueryAliases(defaults.destQuery);
-    warnings.push(...parseResult.warnings);
-
-    validations.push(
-      ...validateStatusAliases(
-        graph, parseResult.aliases, defaults.entityName,
-        defaults.pipelineId, `${pipeline} (parameter default)`, schemaPath,
-      )
+      ...validateStatusAliases(graph, parseResult.aliases, target.entityName, target.id, target.name, schemaPath)
     );
   }
 

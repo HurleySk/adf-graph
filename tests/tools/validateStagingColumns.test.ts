@@ -90,7 +90,7 @@ describe("handleValidateStagingColumns", () => {
     const { graph } = buildGraph(fixtureRoot);
     const result = handleValidateStagingColumns(graph, "NonExistent_Pipeline");
 
-    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.error).toBeDefined();
     expect(result.entries).toEqual([]);
   });
 });

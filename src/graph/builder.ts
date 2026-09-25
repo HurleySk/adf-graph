@@ -1,5 +1,5 @@
 import { readdirSync, statSync, existsSync, readFileSync } from "fs";
-import { join, extname, basename } from "path";
+import { join, extname } from "path";
 import { Graph, GraphNode, GraphEdge, NodeType, EdgeType } from "./model.js";
 import { ADF_DIRS } from "../constants.js";
 import { inferNodeType, parseNodeId, makeNodeId, makeActivityId, makeIntegrationRuntimeId } from "../utils/nodeId.js";

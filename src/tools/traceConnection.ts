@@ -1,3 +1,5 @@
+import { collectContainedActivities } from "../graph/traversalUtils.js";
+import { getActivityType } from "../graph/nodeMetadata.js";
 import { Graph, GraphNode, EdgeType } from "../graph/model.js";
 import { lookupPipelineNode } from "./toolUtils.js";
 import { parseActivityId } from "../utils/nodeId.js";
@@ -68,12 +70,10 @@ function collectChains(
   chains: ConnectionChain[],
   visitedPipelines: Set<string>,
 ): void {
-  const visited = new Set<string>();
-  walkActivities(graph, pipelineId, pipelineName, activityFilter, chains, visited);
+  walkActivities(graph, pipelineId, pipelineName, activityFilter, chains);
 
   // Follow ExecutePipeline edges (Executes edges are from pipeline, not activity)
-  for (const edge of graph.getOutgoing(pipelineId)) {
-    if (edge.type !== EdgeType.Executes) continue;
+  for (const edge of graph.getOutgoing(pipelineId, EdgeType.Executes)) {
     if (visitedPipelines.has(edge.to)) continue;
     visitedPipelines.add(edge.to);
 
@@ -89,28 +89,16 @@ function walkActivities(
   pipelineName: string,
   activityFilter: string | undefined,
   chains: ConnectionChain[],
-  visited: Set<string>,
 ): void {
-  for (const edge of graph.getOutgoing(nodeId)) {
-    if (edge.type !== EdgeType.Contains) continue;
-    if (visited.has(edge.to)) continue;
-    visited.add(edge.to);
-
-    const actNode = graph.getNode(edge.to);
-    if (!actNode) continue;
-
-    // Recurse into container activities (Until, ForEach, IfCondition, Switch)
-    walkActivities(graph, actNode.id, pipelineName, activityFilter, chains, visited);
-
+  for (const { node: actNode } of collectContainedActivities(graph, nodeId)) {
     const { activity: actName } = parseActivityId(actNode.id);
     if (activityFilter && actName !== activityFilter) continue;
 
-    const actType = (actNode.metadata.activityType as string) ?? "unknown";
+    const actType = getActivityType(actNode);
     const steps: ConnectionChainStep[] = [];
 
     // Dataset → LinkedService → Secret chains
-    for (const dsEdge of graph.getOutgoing(actNode.id)) {
-      if (dsEdge.type !== EdgeType.UsesDataset) continue;
+    for (const dsEdge of graph.getOutgoing(actNode.id, EdgeType.UsesDataset)) {
       const dsNode = graph.getNode(dsEdge.to);
       if (!dsNode) continue;
 
@@ -119,15 +107,13 @@ function walkActivities(
 
       steps.push(makeStep(dsNode, dsEdge.type, role));
 
-      for (const lsEdge of graph.getOutgoing(dsNode.id)) {
-        if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
+      for (const lsEdge of graph.getOutgoing(dsNode.id, EdgeType.UsesLinkedService)) {
         appendLinkedServiceChain(graph, lsEdge.to, lsEdge.type, steps, role);
       }
     }
 
     // Direct activity → LinkedService edges (e.g., SqlServerStoredProcedure)
-    for (const lsEdge of graph.getOutgoing(actNode.id)) {
-      if (lsEdge.type !== EdgeType.UsesLinkedService) continue;
+    for (const lsEdge of graph.getOutgoing(actNode.id, EdgeType.UsesLinkedService)) {
       appendLinkedServiceChain(graph, lsEdge.to, lsEdge.type, steps);
     }
 
@@ -149,15 +135,13 @@ function appendLinkedServiceChain(
 
   steps.push(makeStep(lsNode, edgeType, role));
 
-  for (const secEdge of graph.getOutgoing(lsNodeId)) {
-    if (secEdge.type !== EdgeType.ReferencesSecret) continue;
+  for (const secEdge of graph.getOutgoing(lsNodeId, EdgeType.ReferencesSecret)) {
     const secNode = graph.getNode(secEdge.to);
     if (!secNode) continue;
     steps.push(makeStep(secNode, secEdge.type, role));
   }
 
-  for (const vaultEdge of graph.getOutgoing(lsNodeId)) {
-    if (vaultEdge.type !== EdgeType.UsesLinkedService) continue;
+  for (const vaultEdge of graph.getOutgoing(lsNodeId, EdgeType.UsesLinkedService)) {
     const vaultNode = graph.getNode(vaultEdge.to);
     if (!vaultNode) continue;
     steps.push(makeStep(vaultNode, vaultEdge.type, role));

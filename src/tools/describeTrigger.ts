@@ -1,4 +1,4 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { Graph, NodeType } from "../graph/model.js";
 import { makeTriggerId } from "../utils/nodeId.js";
 import type { TriggerSchedule, TriggerPipelineRef } from "../parsers/trigger.js";
 

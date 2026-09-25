@@ -1,10 +1,11 @@
 import { readFileSync, existsSync } from "fs";
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { makeTableId } from "../utils/nodeId.js";
+import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
+import { getActivityMetadata, getActivityType } from "../graph/nodeMetadata.js";
+import { makePipelineId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { parseTableDdl } from "../parsers/tableDdlParser.js";
 import { extractSourceQueryColumns } from "../parsers/sourceQueryParser.js";
-import { lookupPipelineNode } from "./toolUtils.js";
+import { lookupPipelineNode, resolveNode } from "./toolUtils.js";
 import { collectPipelineActivities } from "../graph/traversalUtils.js";
 
 export interface StagingColumnMismatch {
@@ -32,6 +33,7 @@ export interface ValidateStagingColumnsResult {
     autoMappingWarnings: number;
   };
   warnings: string[];
+  error?: string;
 }
 
 function findNearestMatch(col: string, candidates: string[]): string | undefined {
@@ -42,21 +44,13 @@ function findNearestMatch(col: string, candidates: string[]): string | undefined
   return matches[0];
 }
 
-function hasExplicitColumnMappings(graph: Graph, activityNode: { id: string; metadata: Record<string, unknown> }): boolean {
-  const executedPipeline = activityNode.metadata.executedPipeline as string | undefined;
+function hasExplicitColumnMappings(graph: Graph, activityNode: GraphNode): boolean {
+  const { executedPipeline } = getActivityMetadata(activityNode);
   if (!executedPipeline) return false;
 
-  // Check if the child pipeline's Copy activities have MapsColumn edges
-  const childPipelineId = `pipeline:${executedPipeline}`;
-  for (const childNode of collectPipelineActivities(graph, childPipelineId)) {
-    if (childNode.metadata.activityType !== "Copy") continue;
-
-    const copyEdges = graph.getOutgoing(childNode.id);
-    for (const ce of copyEdges) {
-      if (ce.type === EdgeType.MapsColumn) return true;
-    }
-  }
-  return false;
+  return collectPipelineActivities(graph, makePipelineId(executedPipeline)).some(
+    (child) => getActivityType(child) === "Copy" && graph.getOutgoing(child.id, EdgeType.MapsColumn).length > 0,
+  );
 }
 
 export function handleValidateStagingColumns(
@@ -67,7 +61,7 @@ export function handleValidateStagingColumns(
   const warnings: string[] = [];
   let autoMappingWarnings = 0;
 
-  const activityNodes: Array<{ node: ReturnType<Graph["getNode"]>; pipelineName: string }> = [];
+  const activityNodes: Array<{ node: GraphNode; pipelineName: string }> = [];
 
   if (pipeline) {
     const lookup = lookupPipelineNode(graph, pipeline);
@@ -75,7 +69,8 @@ export function handleValidateStagingColumns(
       return {
         entries,
         summary: { activitiesScanned: 0, activitiesWithMismatches: 0, totalMismatches: 0, autoMappingWarnings: 0 },
-        warnings: [lookup.error],
+        warnings,
+        error: lookup.error,
       };
     }
     for (const node of collectPipelineActivities(graph, lookup.id)) {
@@ -91,8 +86,7 @@ export function handleValidateStagingColumns(
   }
 
   for (const { node: actNode, pipelineName } of activityNodes) {
-    if (!actNode) continue;
-    const params = actNode.metadata.pipelineParameters as Record<string, unknown> | undefined;
+    const params = getActivityMetadata(actNode).pipelineParameters;
     if (!params) continue;
 
     const sourceQuery = asNonDynamic(params.source_query);
@@ -103,8 +97,8 @@ export function handleValidateStagingColumns(
 
     const destSchema = asNonDynamic(params.dest_schema_name) ?? "dbo";
 
-    const tableId = makeTableId(destSchema, destObjName);
-    const tableNode = graph.getNode(tableId);
+    const tableId = resolveNode(graph, NodeType.Table, `${destSchema}.${destObjName}`);
+    const tableNode = tableId ? graph.getNode(tableId) : undefined;
     if (!tableNode) {
       warnings.push(`Table node not found: ${destSchema}.${destObjName} (activity '${actNode.name}' in pipeline '${pipelineName}')`);
       continue;

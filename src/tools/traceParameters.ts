@@ -1,7 +1,6 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
-import { findExecutePipelineActivities } from "../graph/traversalUtils.js";
-import { parseNodeId } from "../utils/nodeId.js";
+import { hasEmptyDefault, getParameterDefs } from "../graph/nodeMetadata.js";
+import { Graph } from "../graph/model.js";
+import { findChildPipelineCalls } from "../graph/traversalUtils.js";
 import { lookupPipelineNode } from "./toolUtils.js";
 
 interface ParameterSupplier {
@@ -100,8 +99,7 @@ function tracePipeline(
 
     flows.push(flow);
 
-    const hasEmptyDefault = param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined;
-    if (hasEmptyDefault && flow.suppliers.length === 0) {
+    if (hasEmptyDefault(param) && flow.suppliers.length === 0) {
       const reason: DeadEndParameter["reason"] =
         param.defaultValue === "" ? "empty_default_no_supplier" :
         param.defaultValue === null ? "null_default_no_supplier" :
@@ -128,16 +126,8 @@ function recurseIntoChildren(
   warnings: string[],
   visited: Set<string>,
 ): void {
-  const executesEdges = graph.getOutgoing(pipelineId).filter((e) => e.type === EdgeType.Executes);
-  const execActivities = findExecutePipelineActivities(graph, pipelineId);
-
-  for (const execEdge of executesEdges) {
-    const childPipelineId = execEdge.to;
-    const childPipelineName = parseNodeId(childPipelineId).name;
-    const actNode = execActivities.find((a) => getActivityMetadata(a).executedPipeline === childPipelineName);
-    const childSupplied = actNode ? getActivityMetadata(actNode).pipelineParameters : undefined;
-    const actName = actNode?.name ?? "ExecutePipeline";
-
-    tracePipeline(graph, childPipelineId, parentName, actName, childSupplied ?? null, flows, deadEnds, warnings, visited);
+  for (const call of findChildPipelineCalls(graph, pipelineId)) {
+    const actName = call.activity?.name ?? "ExecutePipeline";
+    tracePipeline(graph, call.childId, parentName, actName, call.suppliedParams, flows, deadEnds, warnings, visited);
   }
 }

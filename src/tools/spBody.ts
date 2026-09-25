@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import { Graph, NodeType } from "../graph/model.js";
-import { makeNodeId } from "../utils/nodeId.js";
+import { parseNodeId } from "../utils/nodeId.js";
+import { resolveNode, splitQualifiedName } from "./toolUtils.js";
 
 export interface SpBodyResult {
   name: string;
@@ -15,10 +16,11 @@ export function handleSpBody(
   name: string,
   schema: string,
 ): SpBodyResult {
-  const spName = name.includes(".") ? name.split(".").slice(1).join(".") : name;
-  const spSchema = name.includes(".") ? name.split(".")[0] : schema;
-  const spId = makeNodeId(NodeType.StoredProcedure, `${spSchema}.${spName}`);
-  const node = graph.getNode(spId);
+  const requested = name.includes(".") ? name : `${schema}.${name}`;
+  const resolvedId = resolveNode(graph, NodeType.StoredProcedure, requested);
+  const qualified = resolvedId ? parseNodeId(resolvedId).name : requested;
+  const [spSchema, spName] = splitQualifiedName(qualified);
+  const node = resolvedId ? graph.getNode(resolvedId) : undefined;
 
   if (!node) {
     return { name: spName, schema: spSchema, sql: "", lineCount: 0, error: `Stored procedure '${spSchema}.${spName}' not found in graph` };

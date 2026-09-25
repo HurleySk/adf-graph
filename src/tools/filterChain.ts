@@ -1,4 +1,4 @@
-import { Graph, NodeType, EdgeType } from "../graph/model.js";
+import { Graph, NodeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
 import { parseActivityId } from "../utils/nodeId.js";
 import { extractWhereClause, type WhereClause } from "../parsers/sqlWhereParser.js";

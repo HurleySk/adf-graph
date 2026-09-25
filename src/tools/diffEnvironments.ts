@@ -1,6 +1,5 @@
 import { GraphManager } from "../graph/manager.js";
-import { Graph } from "../graph/model.js";
-import { NodeType, EdgeType } from "../graph/model.js";
+import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { collectPipelineActivities } from "../graph/traversalUtils.js";
 
 export interface ItemDiffSummary {
@@ -124,8 +123,8 @@ function compareDataset(
   const nodeB = graphB.getNode(idB);
   if (!nodeA || !nodeB) return changes;
 
-  const lsEdgesA = graphA.getOutgoing(idA).filter((e) => e.type === EdgeType.UsesLinkedService);
-  const lsEdgesB = graphB.getOutgoing(idB).filter((e) => e.type === EdgeType.UsesLinkedService);
+  const lsEdgesA = graphA.getOutgoing(idA, EdgeType.UsesLinkedService);
+  const lsEdgesB = graphB.getOutgoing(idB, EdgeType.UsesLinkedService);
   const lsNamesA = lsEdgesA.map((e) => graphA.getNode(e.to)?.name).filter(Boolean).sort();
   const lsNamesB = lsEdgesB.map((e) => graphB.getNode(e.to)?.name).filter(Boolean).sort();
 

@@ -1,7 +1,6 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata } from "../graph/nodeMetadata.js";
-import { parseActivityId } from "../utils/nodeId.js";
-import { makeNodeId } from "../utils/nodeId.js";
+import { parseActivityId, makeNodeId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
 import { resolveDestQueryDefaults } from "./toolUtils.js";
@@ -68,13 +67,12 @@ export function handleEntityCoverage(
     };
   }
 
+  const entityLower = entity.toLowerCase();
   const warnings: string[] = [];
   const entries: PipelineCoverageEntry[] = [];
   const seenActivities = new Set<string>();
 
-  const incoming = graph.getIncoming(entityNodeId);
-  for (const edge of incoming) {
-    if (edge.type !== EdgeType.WritesTo) continue;
+  for (const edge of graph.getIncoming(entityNodeId, EdgeType.WritesTo)) {
 
     const fromNode = graph.getNode(edge.from);
     if (!fromNode || fromNode.type !== NodeType.Activity) continue;
@@ -101,7 +99,7 @@ export function handleEntityCoverage(
         destQuery,
       });
     } else {
-      const mapEdges = graph.getOutgoing(fromNode.id).filter((e) => e.type === EdgeType.MapsColumn);
+      const mapEdges = graph.getOutgoing(fromNode.id, EdgeType.MapsColumn);
       if (mapEdges.length > 0) {
         const columns = mapEdges
           .map((e) => e.metadata.sinkColumn as string | undefined)
@@ -127,7 +125,7 @@ export function handleEntityCoverage(
     if (!params) continue;
 
     const entityParam = asNonDynamic(params.dataverse_entity_name);
-    if (!entityParam || entityParam !== entity) continue;
+    if (!entityParam || entityParam.toLowerCase() !== entityLower) continue;
 
     const destQuery = asNonDynamic(params.dest_query);
     if (!destQuery) continue;
@@ -149,7 +147,7 @@ export function handleEntityCoverage(
   const pipelines = graph.getNodesByType(NodeType.Pipeline);
   for (const pipelineNode of pipelines) {
     const defaults = resolveDestQueryDefaults(pipelineNode);
-    if (!defaults || defaults.entityName !== entity) continue;
+    if (!defaults || defaults.entityName.toLowerCase() !== entityLower) continue;
     if (seenActivities.has(defaults.pipelineId)) continue;
 
     const parseResult = extractDestQueryAliases(defaults.destQuery);

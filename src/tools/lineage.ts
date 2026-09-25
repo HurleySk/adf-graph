@@ -203,9 +203,7 @@ export function handleDataLineage(
 
     // Also find activities that read FROM this node (reads_from reverse linkage)
     // These represent downstream data consumers not captured by standard traversal
-    const incomingEdges = graph.getIncoming(resolvedId);
-    for (const edge of incomingEdges) {
-      if (edge.type !== EdgeType.ReadsFrom) continue;
+    for (const edge of graph.getIncoming(resolvedId, EdgeType.ReadsFrom)) {
       const activityId = edge.from;
       if (visitedNodes.has(activityId)) continue;
 
@@ -226,9 +224,7 @@ export function handleDataLineage(
       }
 
       // Follow writes_to from this activity to find sinks
-      const actOutgoing = graph.getOutgoing(activityId);
-      for (const outEdge of actOutgoing) {
-        if (outEdge.type !== EdgeType.WritesTo) continue;
+      for (const outEdge of graph.getOutgoing(activityId, EdgeType.WritesTo)) {
         if (visitedNodes.has(outEdge.to)) continue;
         visitedNodes.add(outEdge.to);
 
@@ -293,9 +289,7 @@ export function handleDataLineage(
 
     // Check activity nodes for maps_column edges (Copy activity mappings)
     for (const actId of allActivityIds) {
-      const outgoing = graph.getOutgoing(actId);
-      for (const edge of outgoing) {
-        if (edge.type !== EdgeType.MapsColumn) continue;
+      for (const edge of graph.getOutgoing(actId, EdgeType.MapsColumn)) {
         const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
         const sinkColumn = (edge.metadata.sinkColumn as string | null) ?? null;
         if (sourceColumn === attribute || sinkColumn === attribute) {
@@ -310,9 +304,7 @@ export function handleDataLineage(
 
     // Check SP nodes for maps_column edges (SP transform mappings)
     for (const spId of allSpIds) {
-      const outgoing = graph.getOutgoing(spId);
-      for (const edge of outgoing) {
-        if (edge.type !== EdgeType.MapsColumn) continue;
+      for (const edge of graph.getOutgoing(spId, EdgeType.MapsColumn)) {
         const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
         const targetColumn = (edge.metadata.targetColumn as string | null) ?? null;
         if (sourceColumn === attribute || targetColumn === attribute) {
@@ -341,9 +333,7 @@ export function handleDataLineage(
         // Attribute exists in graph — scan all activity nodes for matching MapsColumn edges
         const activityNodes = graph.getNodesByType(NodeType.Activity);
         for (const actNode of activityNodes) {
-          const outgoing = graph.getOutgoing(actNode.id);
-          for (const edge of outgoing) {
-            if (edge.type !== EdgeType.MapsColumn) continue;
+          for (const edge of graph.getOutgoing(actNode.id, EdgeType.MapsColumn)) {
             const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
             const sinkColumn = (edge.metadata.sinkColumn as string | null) ?? null;
             const matchesUpstream = direction === "upstream" && sinkColumn === attribute;

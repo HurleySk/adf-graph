@@ -1,6 +1,6 @@
 import { existsSync, statSync } from "fs";
 import { join } from "path";
-import { AdfGraphConfig, EnvironmentConfig } from "../config.js";
+import { AdfGraphConfig } from "../config.js";
 import { OVERLAY_SUFFIX } from "../constants.js";
 import { clearEntityDetailCache } from "../parsers/dataverseSchema.js";
 import { clearEnvironmentConfigCache } from "../tools/environmentConfig.js";

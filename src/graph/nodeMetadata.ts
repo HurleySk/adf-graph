@@ -7,6 +7,10 @@ export interface ParameterDef {
   defaultValue: unknown;
 }
 
+export function hasEmptyDefault(param: ParameterDef): boolean {
+  return param.defaultValue === "" || param.defaultValue === null || param.defaultValue === undefined;
+}
+
 export interface ActivityMetadata {
   activityType: string;
   sqlQuery?: string;
