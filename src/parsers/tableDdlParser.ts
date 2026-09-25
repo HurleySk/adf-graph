@@ -1,4 +1,4 @@
-import { splitTopLevelCommas } from "./sqlLex.js";
+import { splitTopLevelCommas, stripSqlComments } from "./sqlLex.js";
 
 export interface TableDdlParseResult {
   columns: string[];
@@ -11,7 +11,7 @@ export function parseTableDdl(ddlSql: string): TableDdlParseResult {
   const columns: string[] = [];
   const warnings: string[] = [];
 
-  let sql = ddlSql.replace(/^﻿/, "");
+  const sql = stripSqlComments(ddlSql.replace(/^﻿/, ""));
 
   const createIdx = sql.toUpperCase().indexOf("CREATE TABLE");
   if (createIdx === -1) {

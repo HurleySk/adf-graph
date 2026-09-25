@@ -21,8 +21,8 @@ function skipBlockComment(sql: string, start: number): number {
   return sql.length;
 }
 
-export function isKeywordAt(sql: string, upper: string, i: number, keyword: string): boolean {
-  if (!upper.startsWith(keyword, i)) return false;
+export function isKeywordAt(sql: string, i: number, keyword: string): boolean {
+  if (sql.substr(i, keyword.length).toUpperCase() !== keyword) return false;
   const before = sql[i - 1];
   const after = sql[i + keyword.length];
   return !(before && WORD_CHAR.test(before)) && !(after && WORD_CHAR.test(after));
@@ -53,17 +53,21 @@ export function stripSqlComments(sql: string): string {
 export type SqlVisitor = (i: number, depth: number, inCase: boolean) => boolean | void;
 
 export function scanSql(sql: string, visit: SqlVisitor, start = 0): number {
-  const upper = sql.toUpperCase();
   let depth = 0;
   let caseDepth = 0;
   for (let i = start; i < sql.length; i++) {
     const ch = sql[i];
     if (QUOTE_CLOSE[ch]) { i = skipQuoted(sql, i); continue; }
+    if (ch === "-" && sql[i + 1] === "-") {
+      while (i + 1 < sql.length && sql[i + 1] !== "\n") i++;
+      continue;
+    }
+    if (ch === "/" && sql[i + 1] === "*") { i = skipBlockComment(sql, i) - 1; continue; }
     if (ch === "(") { depth++; continue; }
     if (ch === ")") { depth--; continue; }
     if (depth === 0) {
-      if (isKeywordAt(sql, upper, i, "CASE")) { caseDepth++; i += 3; continue; }
-      if (caseDepth > 0 && isKeywordAt(sql, upper, i, "END")) { caseDepth--; i += 2; continue; }
+      if (isKeywordAt(sql, i, "CASE")) { caseDepth++; i += 3; continue; }
+      if (caseDepth > 0 && isKeywordAt(sql, i, "END")) { caseDepth--; i += 2; continue; }
     }
     if (visit(i, depth, caseDepth > 0) === true) return i;
   }
@@ -75,8 +79,7 @@ export function scanTopLevel(sql: string, visit: (i: number) => boolean | void, 
 }
 
 export function findTopLevelKeyword(sql: string, keyword: string, start = 0): number {
-  const upper = sql.toUpperCase();
-  return scanTopLevel(sql, (i) => isKeywordAt(sql, upper, i, keyword), start);
+  return scanTopLevel(sql, (i) => isKeywordAt(sql, i, keyword), start);
 }
 
 export function splitTopLevelCommas(text: string): string[] {
@@ -101,10 +104,9 @@ export function unquoteIdent(name: string): string {
 
 export function splitTrailingAlias(expr: string): { expression: string; alias: string } | null {
   const trimmed = expr.trim();
-  const upper = trimmed.toUpperCase();
   let lastAs = -1;
   scanTopLevel(trimmed, (i) => {
-    if (isKeywordAt(trimmed, upper, i, "AS")) lastAs = i;
+    if (isKeywordAt(trimmed, i, "AS")) lastAs = i;
   });
   if (lastAs === -1) return null;
   const alias = unquoteIdent(trimmed.substring(lastAs + 2).trim());

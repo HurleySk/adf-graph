@@ -18,7 +18,7 @@ export function handleSpBody(
   schema: string,
 ): SpBodyResult {
   const requested = name.includes(".") ? name : `${schema}.${name}`;
-  const resolvedId = resolveNode(graph, NodeType.StoredProcedure, requested);
+  const resolvedId = resolveNode(graph, NodeType.StoredProcedure, requested) ?? (name.includes(".") ? null : resolveNode(graph, NodeType.StoredProcedure, name));
   const qualified = resolvedId ? parseNodeId(resolvedId).name : requested;
   const [spSchema, spName] = splitQualifiedName(qualified);
   const node = resolvedId ? graph.getNode(resolvedId) : undefined;

@@ -454,7 +454,7 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
       folder: z.string().optional().describe("ADF folder name to cross-check for orphan pipelines (e.g. 'Wave 3')"),
     },
     ({ roots, folder }, { graph, envName }) =>
-      handleGenerateScope(graph, { roots: roots ?? manager.getScopeRoots(envName) ?? DEFAULT_SCOPE_ROOTS, folder }),
+      handleGenerateScope(graph, { roots: roots?.length ? roots : manager.getScopeRoots(envName) ?? DEFAULT_SCOPE_ROOTS, folder }),
   );
 
   envTool(

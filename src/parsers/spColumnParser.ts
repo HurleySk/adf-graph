@@ -27,7 +27,7 @@ export interface SpParseResult {
   confidence: "high" | "medium" | "low";
 }
 
-import { stripSqlComments, splitTopLevelCommas, parenDepthMap } from "./sqlLex.js";
+import { stripSqlComments, splitTopLevelCommas, parenDepthMap, scanTopLevel, isKeywordAt } from "./sqlLex.js";
 
 /* ──────────────────────────── helpers ──────────────────────────── */
 
@@ -151,6 +151,66 @@ const QUALIFIED_IDENT = `(?:${IDENT}\\.)*${IDENT}`;
 
 /* ──────────────────────────── statement parsers ──────────────────────────── */
 
+const STATEMENT_KEYWORDS = [
+  "UPDATE", "INSERT", "DELETE", "MERGE", "SELECT", "SET", "IF", "ELSE", "WHILE", "BEGIN", "END",
+  "DECLARE", "EXEC", "EXECUTE", "RETURN", "TRUNCATE", "PRINT", "RAISERROR", "THROW", "COMMIT", "ROLLBACK",
+];
+const SET_CLAUSE_STOPS = ["WHERE", "FROM", "OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
+const FROM_CLAUSE_STOPS = ["WHERE", "OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
+const WHERE_CLAUSE_STOPS = ["OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
+const MERGE_SET_STOPS = ["WHEN", "OUTPUT", "OPTION", ...STATEMENT_KEYWORDS];
+const NON_ALIAS_WORDS = new Set([
+  "ON", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "CROSS", "APPLY", "WITH",
+  "GROUP", "ORDER", "UNION", "PIVOT", "UNPIVOT", "OPTION", "OUTPUT",
+]);
+
+function clauseEnd(sql: string, start: number, stops: string[]): number {
+  const end = scanTopLevel(sql, (i) => {
+    if (sql[i] === ";") return true;
+    if (!/[A-Za-z]/.test(sql[i]) || /\w/.test(sql[i - 1] ?? "")) return false;
+    return stops.some((k) => isKeywordAt(sql, i, k));
+  }, start);
+  return end === -1 ? sql.length : end;
+}
+
+type FromSource = { table: string; alias?: string; topLevel: boolean };
+
+function parseFromSources(fromClause: string): FromSource[] {
+  const sources: FromSource[] = [];
+  const sourceRegex = new RegExp(
+    `(^|\\b(?:FROM|JOIN|APPLY)\\s+|,\\s*)(${QUALIFIED_IDENT})(\\s*\\()?(?:\\s+(?:AS\\s+)?(${IDENT}))?`,
+    "gi",
+  );
+  const depth = parenDepthMap(fromClause);
+  let ref: RegExpExecArray | null;
+  while ((ref = sourceRegex.exec(fromClause)) !== null) {
+    const topLevel = depth[ref.index] === 0;
+    const afterName = ref.index + ref[1].length + ref[2].length;
+    let alias = ref[4] ? normalizeName(ref[4]) : undefined;
+    if (alias && NON_ALIAS_WORDS.has(alias.toUpperCase())) alias = undefined;
+    if ((ref[1].startsWith(",") && !topLevel) || ref[3]) {
+      sourceRegex.lastIndex = afterName;
+      continue;
+    }
+    if (!alias) sourceRegex.lastIndex = afterName;
+    const table = normalizeTable(ref[2]);
+    if (!table || /^\d+$/.test(table) || /^select$/i.test(table)) continue;
+    sources.push({ table, alias, topLevel });
+  }
+  return sources;
+}
+
+function subqueryTables(text: string): string[] {
+  const tables: string[] = [];
+  const refRegex = new RegExp(`\\b(?:FROM|JOIN)\\s+(${QUALIFIED_IDENT})(?![\\w\\]]|\\s*\\()`, "gi");
+  let ref: RegExpExecArray | null;
+  while ((ref = refRegex.exec(text)) !== null) {
+    const table = normalizeTable(ref[1]);
+    if (table && !/^select$/i.test(table)) tables.push(table);
+  }
+  return tables;
+}
+
 /**
  * Parse UPDATE <table> SET <col> = <expr>, … [FROM <tables>]
  */
@@ -160,35 +220,39 @@ function parseUpdateStatements(sql: string): StatementResult {
   const writeTables: string[] = [];
   let parsed = 0;
 
-  // Match UPDATE [schema].[table] SET ...
-  const updateRegex = new RegExp(
-    `\\bUPDATE\\s+(${QUALIFIED_IDENT})\\s+SET\\s+([\\s\\S]*?)(?=\\bWHERE\\b|\\bFROM\\b|\\bOUTPUT\\b|;|\\bEND\\b|$)`,
-    "gi"
-  );
+  const updateRegex = new RegExp(`\\bUPDATE\\s+(${QUALIFIED_IDENT})\\s+SET\\s+`, "gi");
 
   let match: RegExpExecArray | null;
   while ((match = updateRegex.exec(sql)) !== null) {
-    const targetTable = normalizeTable(match[1]);
-    const setClause = match[2];
+    const setStart = match.index + match[0].length;
+    const setEnd = clauseEnd(sql, setStart, SET_CLAUSE_STOPS);
+    const setClause = sql.slice(setStart, setEnd);
+
+    let sources: FromSource[] = [];
+    let cursor = setEnd;
+    if (isKeywordAt(sql, cursor, "FROM")) {
+      const fromStart = cursor + 4;
+      cursor = clauseEnd(sql, fromStart, FROM_CLAUSE_STOPS);
+      sources = parseFromSources(sql.slice(fromStart, cursor).trim());
+    }
+    let whereClause = "";
+    if (isKeywordAt(sql, cursor, "WHERE")) {
+      whereClause = sql.slice(cursor + 5, clauseEnd(sql, cursor + 5, WHERE_CLAUSE_STOPS));
+    }
+    for (const table of subqueryTables(`${setClause} ${whereClause}`)) {
+      if (!sources.some((src) => src.table === table)) sources.push({ table, topLevel: false });
+    }
+
+    let targetTable = normalizeTable(match[1]);
+    if (!targetTable.includes(".")) {
+      const aliased = sources.find((src) => src.topLevel && src.alias?.toLowerCase() === targetTable.toLowerCase());
+      if (aliased) targetTable = aliased.table;
+    }
 
     writeTables.push(targetTable);
     parsed++;
-
-    // Extract FROM clause for source tables
-    const afterSet = sql.slice(match.index + match[0].length);
-    const fromMatch = /^\s*(?:WHERE[\s\S]*?)?\bFROM\s+([\s\S]*?)(?=\bWHERE\b|;|\bEND\b|$)/i.exec(afterSet);
-    if (fromMatch) {
-      const sourceRegex = new RegExp(`(^|\\b(?:FROM|JOIN|APPLY)\\s+|,\\s*)(${QUALIFIED_IDENT})`, "gi");
-      const fromClause = fromMatch[1].trim();
-      const depth = parenDepthMap(fromClause);
-      let ref: RegExpExecArray | null;
-      while ((ref = sourceRegex.exec(fromClause)) !== null) {
-        if (ref[1].startsWith(",") && depth[ref.index] !== 0) continue;
-        const t = normalizeTable(ref[2]);
-        if (t && !/^\d+$/.test(t) && !/^select$/i.test(t) && t !== targetTable) {
-          readTables.push(t);
-        }
-      }
+    for (const src of sources) {
+      if (src.table !== targetTable) readTables.push(src.table);
     }
 
     pushSetAssignments(mappings, setClause, targetTable, targetTable);
@@ -255,11 +319,12 @@ function parseMergeStatements(sql: string): StatementResult {
     const restOfMerge = sql.slice(match.index + match[0].length);
 
     // Parse WHEN MATCHED THEN UPDATE SET assignments
-    const whenMatchedRegex =
-      /\bWHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+([\s\S]*?)(?=\bWHEN\b|;|\bEND\b|$)/gi;
+    const whenMatchedRegex = /\bWHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+/gi;
     let whenMatch: RegExpExecArray | null;
     while ((whenMatch = whenMatchedRegex.exec(restOfMerge)) !== null) {
-      pushSetAssignments(mappings, whenMatch[1], sourceTable, targetTable);
+      const setStart = whenMatch.index + whenMatch[0].length;
+      const setClause = restOfMerge.slice(setStart, clauseEnd(restOfMerge, setStart, MERGE_SET_STOPS));
+      pushSetAssignments(mappings, setClause, sourceTable, targetTable);
     }
 
     // Parse WHEN NOT MATCHED THEN INSERT (cols) VALUES (vals)

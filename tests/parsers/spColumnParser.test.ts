@@ -15,7 +15,65 @@ describe("parseSpBody", () => {
         WHERE s.active = 1;
       `;
       const result = parseSpBody("p_Update_From_Join", sql);
-      expect(result.readTables.sort()).toEqual(["dbo.Extra", "dbo.Matches", "dbo.Staging"]);
+      expect(result.writeTables).toEqual(["dbo.Staging"]);
+      expect(result.readTables.sort()).toEqual(["dbo.Extra", "dbo.Matches"]);
+    });
+
+    it("does not spill the FROM clause into the next statement", () => {
+      const sql = `
+        UPDATE s SET s.a = m.a FROM dbo.S s JOIN dbo.M m ON m.id = s.id
+
+        UPDATE dbo.T SET x = 1, y = 2 WHERE z = 3
+        UPDATE s2 SET s2.a = m.a FROM dbo.S2 s2 JOIN dbo.M m ON m.id = s2.id
+        INSERT INTO dbo.Z (c1, c2) SELECT q1, q2 FROM dbo.Q
+      `;
+      const result = parseSpBody("p_No_Spill", sql);
+      expect(result.readTables.sort()).toEqual(["dbo.M", "dbo.Q"]);
+      expect(result.writeTables.sort()).toEqual(["dbo.S", "dbo.S2", "dbo.T", "dbo.Z"]);
+    });
+
+    it("keeps assignments after a CASE...END and still reads the FROM tables", () => {
+      const sql = `
+        UPDATE t SET t.a = CASE WHEN m.x = 1 THEN 1 ELSE 0 END, t.b = m.b
+        FROM dbo.T t JOIN dbo.M m ON m.id = t.id;
+      `;
+      const result = parseSpBody("p_Case_Set", sql);
+      expect(result.mappings.map((m) => m.targetColumn)).toEqual(["a", "b"]);
+      expect(result.readTables).toEqual(["dbo.M"]);
+      expect(result.writeTables).toEqual(["dbo.T"]);
+    });
+
+    it("scans JOINs after a derived table containing WHERE", () => {
+      const sql = `
+        UPDATE t SET a = m.a
+        FROM dbo.T t
+        JOIN (SELECT id, a FROM dbo.M WHERE f = 1) m ON m.id = t.id
+        INNER JOIN dbo.Other o ON o.id = t.id
+        WHERE t.z = 1;
+      `;
+      const result = parseSpBody("p_Derived_Where", sql);
+      expect(result.readTables.sort()).toEqual(["dbo.M", "dbo.Other"]);
+    });
+
+    it("reads tables from subqueries in the SET and WHERE clauses", () => {
+      const sql = `
+        UPDATE dbo.Run
+        SET [Status] = CASE WHEN EXISTS (SELECT 1 FROM dbo.Result WHERE RunId = @RunId) THEN '' ELSE '' END,
+            [Done] = done_flag
+        WHERE RunId IN (SELECT RunId FROM dbo.Pending)
+      `;
+      const result = parseSpBody("p_Subquery_Reads", sql);
+      expect(result.readTables.sort()).toEqual(["dbo.Pending", "dbo.Result"]);
+      expect(result.mappings.map((m) => m.targetColumn)).toEqual(["Status", "Done"]);
+    });
+
+    it("does not treat table-valued functions as tables", () => {
+      const sql = `
+        UPDATE t SET t.a = j.a
+        FROM dbo.T t CROSS APPLY OPENJSON(t.payload) j;
+      `;
+      const result = parseSpBody("p_Apply_Fn", sql);
+      expect(result.readTables).toEqual([]);
     });
 
     it("reads comma-joined tables but not subquery select-list columns", () => {
@@ -28,7 +86,8 @@ describe("parseSpBody", () => {
         WHERE target.id = source.id AND lk.id = source.id;
       `;
       const result = parseSpBody("p_Update_Comma_Join", sql);
-      expect(result.readTables.sort()).toEqual(["dbo.Lookup", "dbo.Source_Staging", "dbo.Target_Staging"]);
+      expect(result.writeTables).toEqual(["dbo.Target_Staging"]);
+      expect(result.readTables.sort()).toEqual(["dbo.Lookup", "dbo.Source_Staging"]);
     });
 
     it("extracts simple UPDATE SET assignments", () => {

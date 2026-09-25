@@ -1,7 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { join } from "path";
 import { buildGraph } from "../../src/graph/builder.js";
-import { lookupPipelineNode } from "../../src/tools/toolUtils.js";
+import { lookupPipelineNode, resolveNode } from "../../src/tools/toolUtils.js";
+import { Graph, NodeType } from "../../src/graph/model.js";
+
+describe("resolveNode", () => {
+  it("prefers the dbo table over a bare-name stub", () => {
+    const g = new Graph();
+    g.addNode({ id: "table:Staging", type: NodeType.Table, name: "Staging", metadata: { stub: true } });
+    g.addNode({ id: "table:dbo.Staging", type: NodeType.Table, name: "dbo.Staging", metadata: {} });
+    expect(resolveNode(g, NodeType.Table, "Staging")).toBe("table:dbo.Staging");
+  });
+});
 
 const fixtureRoot = join(import.meta.dirname, "../fixtures");
 

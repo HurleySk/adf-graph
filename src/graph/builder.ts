@@ -22,6 +22,10 @@ export interface BuildResult {
   buildTimeMs: number;
 }
 
+function withDefaultSchema(table: string): string {
+  return table.includes(".") ? table : `dbo.${table}`;
+}
+
 /**
  * Merge a ParseResult into a graph: add any nodes not already present,
  * and add all edges.
@@ -247,7 +251,7 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
 
     // Add reads_from edges: SP → source table
     for (const sourceTable of parseResult.readTables) {
-      const tableNodeId = makeNodeId(NodeType.Table, sourceTable);
+      const tableNodeId = makeNodeId(NodeType.Table, withDefaultSchema(sourceTable));
       const edge: GraphEdge = {
         from: spNode.id,
         to: tableNodeId,
@@ -259,7 +263,7 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
 
     // Add writes_to edges: SP → target table
     for (const targetTable of parseResult.writeTables) {
-      const tableNodeId = makeNodeId(NodeType.Table, targetTable);
+      const tableNodeId = makeNodeId(NodeType.Table, withDefaultSchema(targetTable));
       const edge: GraphEdge = {
         from: spNode.id,
         to: tableNodeId,

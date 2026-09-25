@@ -85,11 +85,9 @@ export function resolveEntityName(
   const written = getWrittenEntity(graph, activityNode.id);
   if (written) return written;
 
-  for (const edge of graph.getOutgoing(activityNode.id, EdgeType.Executes)) {
-    const childPipeline = graph.getNode(edge.to);
-    if (!childPipeline) continue;
-
-    for (const childActivity of collectPipelineActivities(graph, edge.to)) {
+  const { executedPipeline } = getActivityMetadata(activityNode);
+  if (executedPipeline) {
+    for (const childActivity of collectPipelineActivities(graph, makePipelineId(executedPipeline))) {
       const childWritten = getWrittenEntity(graph, childActivity.id);
       if (childWritten) return childWritten;
     }
@@ -171,14 +169,14 @@ export function resolveDestQueryDefaults(
 const SCHEMA_QUALIFIED_TYPES = new Set<string>([NodeType.Table, NodeType.StoredProcedure]);
 
 export function resolveNode(graph: Graph, type: string, name: string): string | null {
-  const exactId = makeNodeId(type, name);
-  if (graph.getNode(exactId)) return exactId;
-
   const qualified = SCHEMA_QUALIFIED_TYPES.has(type);
   if (qualified && !name.includes(".")) {
     const dboId = makeNodeId(type, `dbo.${name}`);
     if (graph.getNode(dboId)) return dboId;
   }
+
+  const exactId = makeNodeId(type, name);
+  if (graph.getNode(exactId)) return exactId;
 
   const lower = name.toLowerCase();
   const match = graph.getNodesByType(type as NodeType).find((n) => {

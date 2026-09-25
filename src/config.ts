@@ -125,9 +125,9 @@ function validateConfig(raw: unknown, source: string): AdfGraphConfig {
     }
     let scopeRoots: string[] | undefined;
     if (envObj.scopeRoots !== undefined) {
-      if (!Array.isArray(envObj.scopeRoots) || envObj.scopeRoots.some((r) => typeof r !== "string" || !r)) {
+      if (!Array.isArray(envObj.scopeRoots) || envObj.scopeRoots.length === 0 || envObj.scopeRoots.some((r) => typeof r !== "string" || !r)) {
         throw new Error(
-          `adf-graph: environment '${name}' in '${source}': scopeRoots must be an array of non-empty strings`,
+          `adf-graph: environment '${name}' in '${source}': scopeRoots must be a non-empty array of non-empty strings`,
         );
       }
       scopeRoots = envObj.scopeRoots as string[];

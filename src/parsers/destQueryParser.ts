@@ -34,10 +34,9 @@ export interface CaseValue {
  * statement is wrapped in parentheses.
  */
 function findOuterSelectIndex(sql: string): number {
-  const upper = sql.toUpperCase();
   let firstAnyDepth = -1;
   const topLevel = scanSql(sql, (i, depth) => {
-    if (!isKeywordAt(sql, upper, i, "SELECT")) return;
+    if (!isKeywordAt(sql, i, "SELECT")) return;
     if (depth === 0) return true;
     if (firstAnyDepth === -1) firstAnyDepth = i;
   });

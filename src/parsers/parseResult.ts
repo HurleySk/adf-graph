@@ -44,7 +44,7 @@ export interface TableRef {
  * Callers can distinguish main tables (depth 0) from subquery tables (depth > 0).
  */
 export function extractAllTablesFromSql(sql: string): TableRef[] {
-  const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?(?:\.\[?(\w+)\]?)?/gi;
+  const regex = /\b(?:FROM|JOIN)\s+\[?(\w+)\]?(?:\.\[?(\w+)\]?)?/gi;
   const results: TableRef[] = [];
 
   const depthArr = parenDepthMap(sql);

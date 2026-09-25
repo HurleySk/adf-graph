@@ -96,17 +96,18 @@ export function handleValidateStagingColumns(
     if (!destObjName) continue;
 
     const destSchema = asNonDynamic(params.dest_schema_name) ?? "dbo";
+    const qualifiedDest = destObjName.includes(".") ? destObjName : `${destSchema}.${destObjName}`;
 
-    const tableId = resolveNode(graph, NodeType.Table, `${destSchema}.${destObjName}`);
+    const tableId = resolveNode(graph, NodeType.Table, qualifiedDest);
     const tableNode = tableId ? graph.getNode(tableId) : undefined;
     if (!tableNode) {
-      warnings.push(`Table node not found: ${destSchema}.${destObjName} (activity '${actNode.name}' in pipeline '${pipelineName}')`);
+      warnings.push(`Table node not found: ${qualifiedDest} (activity '${actNode.name}' in pipeline '${pipelineName}')`);
       continue;
     }
 
     const { filePath } = getTableMetadata(tableNode);
     if (!filePath || !existsSync(filePath)) {
-      warnings.push(`DDL file not found for ${destSchema}.${destObjName}: ${filePath ?? "no path"}`);
+      warnings.push(`DDL file not found for ${qualifiedDest}: ${filePath ?? "no path"}`);
       continue;
     }
 
@@ -148,7 +149,7 @@ export function handleValidateStagingColumns(
     entries.push({
       pipeline: pipelineName,
       activity: actNode.name,
-      stagingTable: `${destSchema}.${destObjName}`,
+      stagingTable: qualifiedDest,
       hasExplicitMappings: hasMapping,
       sourceColumns: sourceColNames,
       stagingColumns: ddlResult.columns,

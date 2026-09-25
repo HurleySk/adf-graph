@@ -100,3 +100,24 @@ describe("parser integration", () => {
     expect(result.mappings.map((m) => m.targetColumn)).toEqual(["col"]);
   });
 });
+
+describe("review regressions", () => {
+  it("ignores apostrophes inside DDL comments", () => {
+    const ddl = "CREATE TABLE dbo.T ([a] INT,\n -- don't touch\n [b] INT, [c] VARCHAR(10) DEFAULT 'x', [d] INT)";
+    expect(parseTableDdl(ddl).columns).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("does not take a column ending in 'from' as the subquery table", () => {
+    const where = extractWhereClause("SELECT * FROM dbo.X WHERE id IN (SELECT ValidFrom FROM dbo.CDC_X_Current)");
+    expect(where!.conditions[0].subqueryTable).toBe("dbo.CDC_X_Current");
+  });
+
+  it("matches keywords after characters whose uppercase form is longer", () => {
+    const { aliases } = extractDestQueryAliases("SELECT a AS x, 'Straße' AS y, b AS z FROM t");
+    expect(aliases.map((a) => a.alias)).toEqual(["x", "y", "z"]);
+  });
+
+  it("skips commas inside comments when splitting", () => {
+    expect(splitTopLevelCommas("a, -- b, c\n d")).toEqual(["a", "-- b, c\n d"]);
+  });
+});
