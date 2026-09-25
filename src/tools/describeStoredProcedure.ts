@@ -1,3 +1,4 @@
+import { getActivityMetadata, getColumnMappingMetadata, getSpMetadata } from "../graph/nodeMetadata.js";
 import { existsSync, readFileSync } from "fs";
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { makeNodeId, parseActivityId, parseNodeId } from "../utils/nodeId.js";
@@ -56,9 +57,10 @@ export function handleDescribeStoredProcedure(
     };
   }
 
-  const parameters = (node.metadata.parameters as Array<{ name: string; type: string }>) ?? [];
-  const confidence = (node.metadata.spConfidence as string) ?? "unknown";
-  const mappingCount = (node.metadata.spMappingCount as number) ?? 0;
+  const spMeta = getSpMetadata(node);
+  const parameters = spMeta.parameters;
+  const confidence = spMeta.spConfidence;
+  const mappingCount = spMeta.spMappingCount;
 
   const readTables: string[] = [];
   const writeTables: string[] = [];
@@ -78,7 +80,7 @@ export function handleDescribeStoredProcedure(
       const actNode = graph.getNode(edge.from);
       if (actNode) {
         const { pipeline, activity } = parseActivityId(actNode.id);
-        const spParams = actNode.metadata.storedProcedureParameters as Record<string, unknown> | undefined;
+        const spParams = getActivityMetadata(actNode).storedProcedureParameters;
         calledBy.push({
           pipeline,
           activity,
@@ -101,20 +103,20 @@ export function handleDescribeStoredProcedure(
 
   if (depth === "full") {
     const columnMappings: ColumnMapping[] = [];
-    for (const edge of graph.getOutgoing(spId)) {
-      if (edge.type === EdgeType.MapsColumn && edge.to === spId) {
-        columnMappings.push({
-          sourceTable: edge.metadata.sourceTable as string,
-          sourceColumn: edge.metadata.sourceColumn as string,
-          targetTable: edge.metadata.targetTable as string,
-          targetColumn: edge.metadata.targetColumn as string,
-          ...(edge.metadata.transformExpression ? { transformExpression: edge.metadata.transformExpression as string } : {}),
-        });
-      }
+    for (const edge of graph.getOutgoing(spId, EdgeType.MapsColumn)) {
+      if (edge.to !== spId) continue;
+      const m = getColumnMappingMetadata(edge);
+      columnMappings.push({
+        sourceTable: m.sourceTable as string,
+        sourceColumn: m.sourceColumn as string,
+        targetTable: m.targetTable as string,
+        targetColumn: m.targetColumn as string,
+        ...(m.transformExpression ? { transformExpression: m.transformExpression } : {}),
+      });
     }
     result.columnMappings = columnMappings;
 
-    const filePath = node.metadata.filePath as string | undefined;
+    const filePath = spMeta.filePath;
     if (filePath && existsSync(filePath)) {
       try {
         result.sqlBody = readFileSync(filePath, "utf-8");

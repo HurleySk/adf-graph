@@ -1,3 +1,4 @@
+import { getEntityMetadata } from "../graph/nodeMetadata.js";
 import { getEntityDetail } from "./toolUtils.js";
 import { Graph, EdgeType } from "../graph/model.js";
 import { makeEntityId } from "../utils/nodeId.js";
@@ -81,13 +82,14 @@ export function handleDescribeEntity(
     }
   }
 
+  const entityMeta = getEntityMetadata(node);
   return {
     entity,
-    displayName: node.metadata.displayName as string | undefined,
-    entitySetName: node.metadata.entitySetName as string | undefined,
-    primaryId: node.metadata.primaryId as string | undefined,
-    primaryName: node.metadata.primaryName as string | undefined,
-    attributeCount: node.metadata.attributeCount as number | undefined,
+    displayName: entityMeta.displayName,
+    entitySetName: entityMeta.entitySetName,
+    primaryId: entityMeta.primaryId,
+    primaryName: entityMeta.primaryName,
+    attributeCount: entityMeta.attributeCount,
     consumers,
     attributes,
   };

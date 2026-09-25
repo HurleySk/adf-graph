@@ -1,4 +1,4 @@
-import { GraphNode } from "./model.js";
+import { GraphNode, GraphEdge } from "./model.js";
 import type { FilterCondition } from "../parsers/sqlWhereParser.js";
 
 export interface ParameterDef {
@@ -60,4 +60,103 @@ export function getActivityMetadata(node: GraphNode): ActivityMetadata {
 
 export function isStub(node: GraphNode): boolean {
   return node.metadata.stub === true;
+}
+
+export interface ColumnInfo {
+  name: string;
+  type?: string;
+  nullable?: boolean;
+}
+
+export interface TableMetadata {
+  filePath?: string;
+  columns: ColumnInfo[];
+  columnCount: number;
+}
+
+export function getTableMetadata(node: GraphNode): TableMetadata {
+  const m = node.metadata;
+  const columns = (m.columns as ColumnInfo[] | undefined) ?? [];
+  return {
+    filePath: m.filePath as string | undefined,
+    columns,
+    columnCount: (m.columnCount as number | undefined) ?? columns.length,
+  };
+}
+
+export interface SpParameterInfo {
+  name: string;
+  type: string;
+}
+
+export interface SpMetadata {
+  filePath?: string;
+  parameters: SpParameterInfo[];
+  spConfidence: string;
+  spMappingCount: number;
+}
+
+export function getSpMetadata(node: GraphNode): SpMetadata {
+  const m = node.metadata;
+  return {
+    filePath: m.filePath as string | undefined,
+    parameters: (m.parameters as SpParameterInfo[] | undefined) ?? [],
+    spConfidence: (m.spConfidence as string | undefined) ?? "unknown",
+    spMappingCount: (m.spMappingCount as number | undefined) ?? 0,
+  };
+}
+
+export interface EntityMetadata {
+  displayName?: string;
+  entitySetName?: string;
+  primaryId?: string;
+  primaryName?: string;
+  attributeCount?: number;
+  schemaFile?: string;
+}
+
+export function getEntityMetadata(node: GraphNode): EntityMetadata {
+  const m = node.metadata;
+  return {
+    displayName: m.displayName as string | undefined,
+    entitySetName: m.entitySetName as string | undefined,
+    primaryId: m.primaryId as string | undefined,
+    primaryName: m.primaryName as string | undefined,
+    attributeCount: m.attributeCount as number | undefined,
+    schemaFile: m.schemaFile as string | undefined,
+  };
+}
+
+export interface LinkedServiceMetadata {
+  linkedServiceType: string;
+  connectionProperties: Record<string, string>;
+}
+
+export function getLinkedServiceMetadata(node: GraphNode): LinkedServiceMetadata {
+  const m = node.metadata;
+  return {
+    linkedServiceType: (m.linkedServiceType as string | undefined) ?? "",
+    connectionProperties: (m.connectionProperties as Record<string, string> | undefined) ?? {},
+  };
+}
+
+export interface ColumnMappingMetadata {
+  sourceColumn: string | null;
+  sinkColumn: string | null;
+  targetColumn: string | null;
+  sourceTable?: string;
+  targetTable?: string;
+  transformExpression?: string;
+}
+
+export function getColumnMappingMetadata(edge: GraphEdge): ColumnMappingMetadata {
+  const m = edge.metadata;
+  return {
+    sourceColumn: (m.sourceColumn as string | null | undefined) ?? null,
+    sinkColumn: (m.sinkColumn as string | null | undefined) ?? null,
+    targetColumn: (m.targetColumn as string | null | undefined) ?? null,
+    sourceTable: (m.sourceTable as string | undefined) || undefined,
+    targetTable: (m.targetTable as string | undefined) || undefined,
+    transformExpression: (m.transformExpression as string | undefined) || undefined,
+  };
 }

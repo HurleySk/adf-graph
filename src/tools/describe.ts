@@ -1,6 +1,6 @@
 import { findRootOrchestrators } from "./findOrchestrators.js";
 import { Graph, EdgeType, type GraphEdge } from "../graph/model.js";
-import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { ParameterDef, getParameterDefs, getActivityType, getActivityMetadata, getColumnMappingMetadata } from "../graph/nodeMetadata.js";
 import { parseNodeId } from "../utils/nodeId.js";
 import { lookupPipelineNode, resolveDatasetLinkedServices } from "./toolUtils.js";
 import { collectContainedActivities } from "../graph/traversalUtils.js";
@@ -134,8 +134,8 @@ export function handleDescribePipeline(
         const colMappings = actOutgoing
           .filter((e) => e.type === EdgeType.MapsColumn)
           .map((e) => ({
-            sourceColumn: (e.metadata.sourceColumn as string | null) ?? null,
-            sinkColumn: (e.metadata.sinkColumn as string | null) ?? null,
+            sourceColumn: getColumnMappingMetadata(e).sourceColumn,
+            sinkColumn: getColumnMappingMetadata(e).sinkColumn,
           }));
 
         activityInfo.sources = sources;

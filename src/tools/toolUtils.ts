@@ -2,7 +2,7 @@ import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
 import { makeNodeId, makeEntityId, makePipelineId, parseActivityId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { loadEntityDetail, type EntityDetail } from "../parsers/dataverseSchema.js";
-import { getParameterDefs, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { getParameterDefs, getActivityMetadata, getEntityMetadata, getLinkedServiceMetadata } from "../graph/nodeMetadata.js";
 import { collectPipelineActivities } from "../graph/traversalUtils.js";
 import { resolveChildParameters } from "../utils/parameterResolver.js";
 
@@ -127,7 +127,8 @@ export function getEntityAttributes(
 
 export function getEntityDetail(graph: Graph, entityName: string, schemaPath?: string): EntityDetail | null {
   if (!schemaPath) return null;
-  const schemaFile = graph.getNode(makeEntityId(entityName))?.metadata.schemaFile as string | undefined;
+  const entityNode = graph.getNode(makeEntityId(entityName));
+  const schemaFile = entityNode ? getEntityMetadata(entityNode).schemaFile : undefined;
   return schemaFile ? loadEntityDetail(schemaPath, schemaFile) : null;
 }
 
@@ -263,14 +264,14 @@ export function resolveDatasetLinkedServices(
     for (const edge of graph.getOutgoing(dsId, EdgeType.UsesLinkedService)) {
       const lsNode = graph.getNode(edge.to);
       if (!lsNode) continue;
-      const cp = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
+      const lsMeta = getLinkedServiceMetadata(lsNode);
       results.push({
         datasetId: dsId,
         datasetName: dsNode.name,
         lsId: lsNode.id,
         lsName: lsNode.name,
-        lsType: (lsNode.metadata.linkedServiceType as string) ?? "",
-        connectionProperties: cp ?? {},
+        lsType: lsMeta.linkedServiceType,
+        connectionProperties: lsMeta.connectionProperties,
       });
     }
   }

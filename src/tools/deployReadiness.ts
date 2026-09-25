@@ -1,4 +1,4 @@
-import { hasEmptyDefault, getParameterDefs } from "../graph/nodeMetadata.js";
+import { hasEmptyDefault, getParameterDefs, getLinkedServiceMetadata } from "../graph/nodeMetadata.js";
 import { Graph, EdgeType } from "../graph/model.js";
 import { CONNECTION_PROPERTY_KEYS } from "../utils/connectionProperties.js";
 import { findChildPipelineCalls } from "../graph/traversalUtils.js";
@@ -231,8 +231,8 @@ function checkLinkedServiceConsistency(
     const nodeB = compareGraph.getNode(id);
     if (!nodeA || !nodeB) continue;
 
-    const cpA = (nodeA.metadata.connectionProperties ?? {}) as Record<string, unknown>;
-    const cpB = (nodeB.metadata.connectionProperties ?? {}) as Record<string, unknown>;
+    const cpA: Record<string, unknown> = getLinkedServiceMetadata(nodeA).connectionProperties;
+    const cpB: Record<string, unknown> = getLinkedServiceMetadata(nodeB).connectionProperties;
 
     for (const field of CONNECTION_PROPERTY_KEYS) {
       const valA = cpA[field];

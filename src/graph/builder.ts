@@ -1,3 +1,4 @@
+import { getLinkedServiceMetadata, getSpMetadata } from "./nodeMetadata.js";
 import { readdirSync, statSync, existsSync, readFileSync } from "fs";
 import { join, extname } from "path";
 import { Graph, GraphNode, GraphEdge, NodeType, EdgeType } from "./model.js";
@@ -146,8 +147,7 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
 
   // ── Pass 3d: LS → IR edges ────────────────────────────────────────────────
   for (const lsNode of graph.getNodesByType(NodeType.LinkedService)) {
-    const connProps = lsNode.metadata.connectionProperties as Record<string, string> | undefined;
-    const irName = connProps?.connectVia;
+    const irName = getLinkedServiceMetadata(lsNode).connectionProperties.connectVia;
     if (irName) {
       const irId = makeIntegrationRuntimeId(irName);
       graph.addEdge({
@@ -226,7 +226,7 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
   // ── Pass 4c: SP column-level mappings ─────────────────────────────────────
   const spNodes = graph.getNodesByType(NodeType.StoredProcedure);
   for (const spNode of spNodes) {
-    const filePath = spNode.metadata.filePath as string | undefined;
+    const { filePath } = getSpMetadata(spNode);
     if (!filePath || !existsSync(filePath)) continue;
 
     let sqlContent: string;

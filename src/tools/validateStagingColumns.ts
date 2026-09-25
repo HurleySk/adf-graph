@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "fs";
 import { Graph, GraphNode, NodeType, EdgeType } from "../graph/model.js";
-import { getActivityMetadata, getActivityType } from "../graph/nodeMetadata.js";
+import { getActivityMetadata, getActivityType, getTableMetadata } from "../graph/nodeMetadata.js";
 import { makePipelineId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { parseTableDdl } from "../parsers/tableDdlParser.js";
@@ -104,7 +104,7 @@ export function handleValidateStagingColumns(
       continue;
     }
 
-    const filePath = tableNode.metadata.filePath as string | undefined;
+    const { filePath } = getTableMetadata(tableNode);
     if (!filePath || !existsSync(filePath)) {
       warnings.push(`DDL file not found for ${destSchema}.${destObjName}: ${filePath ?? "no path"}`);
       continue;

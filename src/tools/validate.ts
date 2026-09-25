@@ -1,5 +1,5 @@
 import { inferNodeType, makeAttributeId, makeEntityId, parseNodeId } from "../utils/nodeId.js";
-import { hasEmptyDefault, isStub, getParameterDefs } from "../graph/nodeMetadata.js";
+import { hasEmptyDefault, isStub, getParameterDefs, getColumnMappingMetadata } from "../graph/nodeMetadata.js";
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { normalizeUri, extractDvOrg } from "../utils/connectionProperties.js";
 import { resolveDatasetLinkedServices } from "./toolUtils.js";
@@ -186,7 +186,7 @@ export function handleValidate(
           if (writesToEntities.length > 0) {
             const mapColumnEdges = outgoing.filter((e) => e.type === EdgeType.MapsColumn);
             for (const edge of mapColumnEdges) {
-              const sinkCol = edge.metadata.sinkColumn as string | undefined;
+              const sinkCol = getColumnMappingMetadata(edge).sinkColumn;
               if (!sinkCol) continue;
               for (const entityName of writesToEntities) {
                 if (!graph.getNode(makeAttributeId(entityName, sinkCol))) {

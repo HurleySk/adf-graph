@@ -1,5 +1,5 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { getActivityType, getActivityMetadata } from "../graph/nodeMetadata.js";
+import { getActivityType, getActivityMetadata, getEntityMetadata } from "../graph/nodeMetadata.js";
 import { parseActivityId, parseNodeId } from "../utils/nodeId.js";
 
 export interface SearchHit {
@@ -145,8 +145,7 @@ export function handleEnhancedSearch(
 
     // For DataverseEntity nodes, also search displayName and entitySetName
     if (!matchedField && node.type === NodeType.DataverseEntity) {
-      const displayName = node.metadata.displayName as string | undefined;
-      const entitySetName = node.metadata.entitySetName as string | undefined;
+      const { displayName, entitySetName } = getEntityMetadata(node);
       if (displayName && displayName.toLowerCase().includes(lowerQuery)) {
         matchedField = "displayName";
         matchedText = displayName;

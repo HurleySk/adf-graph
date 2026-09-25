@@ -1,3 +1,4 @@
+import { getColumnMappingMetadata } from "../graph/nodeMetadata.js";
 import { Graph, EdgeType, GraphEdge, NodeType } from "../graph/model.js";
 import { makeAttributeId } from "../utils/nodeId.js";
 import { resolveEntityOrTableNode } from "./toolUtils.js";
@@ -290,8 +291,7 @@ export function handleDataLineage(
     // Check activity nodes for maps_column edges (Copy activity mappings)
     for (const actId of allActivityIds) {
       for (const edge of graph.getOutgoing(actId, EdgeType.MapsColumn)) {
-        const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
-        const sinkColumn = (edge.metadata.sinkColumn as string | null) ?? null;
+        const { sourceColumn, sinkColumn } = getColumnMappingMetadata(edge);
         if (sourceColumn === attribute || sinkColumn === attribute) {
           columnMappings.push({
             activityId: actId,
@@ -305,17 +305,16 @@ export function handleDataLineage(
     // Check SP nodes for maps_column edges (SP transform mappings)
     for (const spId of allSpIds) {
       for (const edge of graph.getOutgoing(spId, EdgeType.MapsColumn)) {
-        const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
-        const targetColumn = (edge.metadata.targetColumn as string | null) ?? null;
-        if (sourceColumn === attribute || targetColumn === attribute) {
+        const meta = getColumnMappingMetadata(edge);
+        if (meta.sourceColumn === attribute || meta.targetColumn === attribute) {
           const mapping: ColumnMapping = {
             activityId: spId,
-            sourceColumn,
-            sinkColumn: targetColumn,
+            sourceColumn: meta.sourceColumn,
+            sinkColumn: meta.targetColumn,
           };
-          if (edge.metadata.sourceTable) mapping.sourceTable = edge.metadata.sourceTable as string;
-          if (edge.metadata.targetTable) mapping.targetTable = edge.metadata.targetTable as string;
-          if (edge.metadata.transformExpression) mapping.transformExpression = edge.metadata.transformExpression as string;
+          if (meta.sourceTable) mapping.sourceTable = meta.sourceTable;
+          if (meta.targetTable) mapping.targetTable = meta.targetTable;
+          if (meta.transformExpression) mapping.transformExpression = meta.transformExpression;
           columnMappings.push(mapping);
         }
       }
@@ -334,8 +333,7 @@ export function handleDataLineage(
         const activityNodes = graph.getNodesByType(NodeType.Activity);
         for (const actNode of activityNodes) {
           for (const edge of graph.getOutgoing(actNode.id, EdgeType.MapsColumn)) {
-            const sourceColumn = (edge.metadata.sourceColumn as string | null) ?? null;
-            const sinkColumn = (edge.metadata.sinkColumn as string | null) ?? null;
+            const { sourceColumn, sinkColumn } = getColumnMappingMetadata(edge);
             const matchesUpstream = direction === "upstream" && sinkColumn === attribute;
             const matchesDownstream = direction === "downstream" && sourceColumn === attribute;
             if (matchesUpstream || matchesDownstream) {

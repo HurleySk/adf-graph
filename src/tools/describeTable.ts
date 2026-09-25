@@ -1,12 +1,7 @@
+import { getTableMetadata, type ColumnInfo } from "../graph/nodeMetadata.js";
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { makeNodeId, parseActivityId, parseNodeId } from "../utils/nodeId.js";
 import { resolveNode, splitQualifiedName } from "./toolUtils.js";
-
-interface ColumnInfo {
-  name: string;
-  type?: string;
-  nullable?: boolean;
-}
 
 interface Consumer {
   pipeline: string;
@@ -51,8 +46,7 @@ export function handleDescribeTable(
     };
   }
 
-  const columns = (node.metadata.columns as ColumnInfo[]) ?? [];
-  const columnCount = (node.metadata.columnCount as number) ?? columns.length;
+  const { columns, columnCount } = getTableMetadata(node);
 
   const consumers: Consumer[] = [];
   const spConsumers: SpConsumer[] = [];

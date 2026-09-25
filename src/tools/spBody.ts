@@ -1,3 +1,4 @@
+import { getSpMetadata } from "../graph/nodeMetadata.js";
 import { existsSync, readFileSync } from "fs";
 import { Graph, NodeType } from "../graph/model.js";
 import { parseNodeId } from "../utils/nodeId.js";
@@ -26,7 +27,7 @@ export function handleSpBody(
     return { name: spName, schema: spSchema, sql: "", lineCount: 0, error: `Stored procedure '${spSchema}.${spName}' not found in graph` };
   }
 
-  const filePath = node.metadata.filePath as string | undefined;
+  const { filePath } = getSpMetadata(node);
   if (!filePath) {
     return { name: spName, schema: spSchema, sql: "", lineCount: 0, error: `No file path stored for SP '${spSchema}.${spName}'` };
   }

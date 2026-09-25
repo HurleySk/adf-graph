@@ -1,5 +1,5 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
-import { getActivityMetadata } from "../graph/nodeMetadata.js";
+import { getActivityMetadata, getColumnMappingMetadata } from "../graph/nodeMetadata.js";
 import { parseActivityId, makeNodeId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
@@ -102,7 +102,7 @@ export function handleEntityCoverage(
       const mapEdges = graph.getOutgoing(fromNode.id, EdgeType.MapsColumn);
       if (mapEdges.length > 0) {
         const columns = mapEdges
-          .map((e) => e.metadata.sinkColumn as string | undefined)
+          .map((e) => getColumnMappingMetadata(e).sinkColumn)
           .filter((c): c is string => !!c);
         entries.push({
           pipeline,
