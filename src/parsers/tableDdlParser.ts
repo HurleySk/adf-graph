@@ -1,3 +1,5 @@
+import { splitTopLevelCommas } from "./sqlLex.js";
+
 export interface TableDdlParseResult {
   columns: string[];
   warnings: string[];
@@ -36,21 +38,7 @@ export function parseTableDdl(ddlSql: string): TableDdlParseResult {
 
   const body = sql.substring(openParen + 1, closeParen === -1 ? sql.length : closeParen);
 
-  // Split by top-level commas
-  const parts: string[] = [];
-  depth = 0;
-  let current = "";
-  for (const ch of body) {
-    if (ch === "(") { depth++; current += ch; continue; }
-    if (ch === ")") { depth--; current += ch; continue; }
-    if (ch === "," && depth === 0) {
-      parts.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += ch;
-  }
-  if (current.trim()) parts.push(current.trim());
+  const parts = splitTopLevelCommas(body);
 
   for (const part of parts) {
     const trimmed = part.trim();

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { stripSqlComments } from "../../src/parsers/sqlLex.js";
 import {
-  stripSqlComments,
   extractDestQueryAliases,
   extractCaseValues,
   extractCaseElseValue,

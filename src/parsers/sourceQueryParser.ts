@@ -1,4 +1,5 @@
-import { stripSqlComments, extractSelectClause, splitTopLevelCommas } from "./destQueryParser.js";
+import { extractSelectClause } from "./destQueryParser.js";
+import { stripSqlComments, splitTopLevelCommas, splitTrailingAlias } from "./sqlLex.js";
 
 export interface SourceQueryColumn {
   effectiveName: string;
@@ -9,48 +10,6 @@ export interface SourceQueryColumn {
 export interface SourceQueryParseResult {
   columns: SourceQueryColumn[];
   warnings: string[];
-}
-
-function extractTopLevelAlias(expr: string): { before: string; alias: string } | null {
-  const trimmed = expr.trim();
-  const upper = trimmed.toUpperCase();
-
-  let depth = 0;
-  let caseDepth = 0;
-  let lastAsPos = -1;
-
-  for (let i = 0; i < trimmed.length; i++) {
-    const ch = trimmed[i];
-    if (ch === "(") { depth++; continue; }
-    if (ch === ")") { depth--; continue; }
-
-    const remaining = upper.substring(i);
-    if (depth === 0) {
-      if (remaining.startsWith("CASE") && (!trimmed[i + 4] || /\s/.test(trimmed[i + 4]))) caseDepth++;
-      if (remaining.startsWith("END") && (!trimmed[i + 3] || /\s/.test(trimmed[i + 3]))) {
-        if (caseDepth > 0) caseDepth--;
-      }
-    }
-
-    if (depth === 0 && caseDepth === 0 && remaining.match(/^AS\s/i)) {
-      if (i === 0 || /\s/.test(trimmed[i - 1])) {
-        lastAsPos = i;
-      }
-    }
-  }
-
-  if (lastAsPos === -1) return null;
-
-  const before = trimmed.substring(0, lastAsPos).trim();
-  let alias = trimmed.substring(lastAsPos + 2).trim();
-
-  if (alias.startsWith("[") && alias.endsWith("]")) {
-    alias = alias.substring(1, alias.length - 1);
-  } else if (alias.startsWith('"') && alias.endsWith('"')) {
-    alias = alias.substring(1, alias.length - 1);
-  }
-
-  return alias ? { before, alias } : null;
 }
 
 function extractBareColumnName(expr: string): string | null {
@@ -88,7 +47,7 @@ export function extractSourceQueryColumns(sql: string): SourceQueryParseResult {
       continue;
     }
 
-    const aliasResult = extractTopLevelAlias(trimmed);
+    const aliasResult = splitTrailingAlias(trimmed);
     if (aliasResult) {
       columns.push({
         effectiveName: aliasResult.alias,

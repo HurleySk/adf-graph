@@ -1,4 +1,5 @@
 import { GraphNode, GraphEdge } from "../graph/model.js";
+import { parenDepthMap } from "./sqlLex.js";
 
 export interface ParseResult {
   nodes: GraphNode[];
@@ -28,26 +29,9 @@ function resolveTableRef(match: RegExpExecArray): string | null {
  * because they are filters, not data sources.
  */
 export function extractTablesFromSql(sql: string): string[] {
-  const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?(?:\.\[?(\w+)\]?)?/gi;
-  const results: string[] = [];
-
-  // Pre-compute parenthesis depth at each character position
-  const depth = new Int8Array(sql.length);
-  let d = 0;
-  for (let i = 0; i < sql.length; i++) {
-    if (sql[i] === "(") d++;
-    depth[i] = d;
-    if (sql[i] === ")") d--;
-  }
-
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(sql)) !== null) {
-    if (depth[match.index] === 0) {
-      const ref = resolveTableRef(match);
-      if (ref) results.push(ref);
-    }
-  }
-  return results;
+  return extractAllTablesFromSql(sql)
+    .filter((t) => t.depth === 0)
+    .map((t) => t.table);
 }
 
 export interface TableRef {
@@ -63,13 +47,7 @@ export function extractAllTablesFromSql(sql: string): TableRef[] {
   const regex = /(?:FROM|JOIN)\s+\[?(\w+)\]?(?:\.\[?(\w+)\]?)?/gi;
   const results: TableRef[] = [];
 
-  const depthArr = new Int8Array(sql.length);
-  let d = 0;
-  for (let i = 0; i < sql.length; i++) {
-    if (sql[i] === "(") d++;
-    depthArr[i] = d;
-    if (sql[i] === ")") d--;
-  }
+  const depthArr = parenDepthMap(sql);
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(sql)) !== null) {

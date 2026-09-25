@@ -1,3 +1,12 @@
+import {
+  stripSqlComments,
+  scanSql,
+  isKeywordAt,
+  findTopLevelKeyword,
+  splitTopLevelCommas,
+  splitTrailingAlias,
+} from "./sqlLex.js";
+
 export interface DestQueryAlias {
   expression: string;
   alias: string;
@@ -14,32 +23,6 @@ export interface CaseValue {
   whenCondition?: string;
 }
 
-export function stripSqlComments(sql: string): string {
-  const lines = sql.split("\n");
-  return lines
-    .map((line) => {
-      let inString = false;
-      let stringChar = "";
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (inString) {
-          if (ch === stringChar) inString = false;
-          continue;
-        }
-        if (ch === "'" || ch === '"') {
-          inString = true;
-          stringChar = ch;
-          continue;
-        }
-        if (ch === "-" && i + 1 < line.length && line[i + 1] === "-") {
-          return line.substring(0, i);
-        }
-      }
-      return line;
-    })
-    .join("\n");
-}
-
 /**
  * Index of the statement's outermost SELECT keyword.
  *
@@ -52,174 +35,25 @@ export function stripSqlComments(sql: string): string {
  */
 function findOuterSelectIndex(sql: string): number {
   const upper = sql.toUpperCase();
-  let depth = 0;
   let firstAnyDepth = -1;
-
-  for (let i = 0; i < sql.length; i++) {
-    const ch = sql[i];
-
-    // Skip string literals so quoted parens don't skew the depth count
-    if (ch === "'") {
-      i++;
-      while (i < sql.length && sql[i] !== "'") i++;
-      continue;
-    }
-
-    if (ch === "(") { depth++; continue; }
-    if (ch === ")") { depth--; continue; }
-
-    if (!upper.startsWith("SELECT", i)) continue;
-
-    const before = i > 0 ? sql[i - 1] : "";
-    if (before && /[\w$]/.test(before)) continue;
-    const after = sql[i + 6];
-    if (after && !/[\s(]/.test(after)) continue;
-
+  const topLevel = scanSql(sql, (i, depth) => {
+    if (!isKeywordAt(sql, upper, i, "SELECT")) return;
+    if (depth === 0) return true;
     if (firstAnyDepth === -1) firstAnyDepth = i;
-    if (depth === 0) return i;
-  }
-
-  return firstAnyDepth;
+  });
+  return topLevel !== -1 ? topLevel : firstAnyDepth;
 }
 
 export function extractSelectClause(sql: string): string | null {
-  const upper = sql.toUpperCase();
   const selectIdx = findOuterSelectIndex(sql);
   if (selectIdx === -1) return null;
 
   let start = selectIdx + 6;
-  const topMatch = upper.substring(start).match(/^\s+TOP\s+\d+\s+/i);
+  const topMatch = sql.substring(start).match(/^\s+TOP\s+\d+\s+/i);
   if (topMatch) start += topMatch[0].length;
 
-  // Find the top-level FROM (not inside subqueries)
-  let depth = 0;
-  let caseDepth = 0;
-  for (let i = start; i < sql.length; i++) {
-    const ch = sql[i];
-    if (ch === "(") { depth++; continue; }
-    if (ch === ")") { depth--; continue; }
-    if (depth > 0) continue;
-
-    const remaining = upper.substring(i);
-    if (remaining.startsWith("CASE")) {
-      const after = sql[i + 4];
-      if (!after || /\s/.test(after)) caseDepth++;
-      continue;
-    }
-    if (remaining.startsWith("END")) {
-      const after = sql[i + 3];
-      if (!after || /\s/.test(after)) {
-        if (caseDepth > 0) caseDepth--;
-      }
-      continue;
-    }
-    if (caseDepth > 0) continue;
-
-    if (remaining.startsWith("FROM")) {
-      const after = sql[i + 4];
-      if (!after || /\s/.test(after)) {
-        return sql.substring(start, i).trim();
-      }
-    }
-  }
-
-  return sql.substring(start).trim();
-}
-
-export function splitTopLevelCommas(clause: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let caseDepth = 0;
-  let current = "";
-  const upper = clause.toUpperCase();
-
-  for (let i = 0; i < clause.length; i++) {
-    const ch = clause[i];
-
-    if (ch === "(") { depth++; current += ch; continue; }
-    if (ch === ")") { depth--; current += ch; continue; }
-
-    if (depth === 0) {
-      const remaining = upper.substring(i);
-      if (remaining.startsWith("CASE")) {
-        const after = clause[i + 4];
-        if (!after || /\s/.test(after)) caseDepth++;
-      }
-      if (remaining.startsWith("END")) {
-        const after = clause[i + 3];
-        if (!after || /\s/.test(after) || after === ",") {
-          if (caseDepth > 0) caseDepth--;
-        }
-      }
-    }
-
-    if (ch === "," && depth === 0 && caseDepth === 0) {
-      parts.push(current.trim());
-      current = "";
-      continue;
-    }
-
-    current += ch;
-  }
-
-  if (current.trim().length > 0) {
-    parts.push(current.trim());
-  }
-
-  return parts;
-}
-
-function extractAlias(expr: string): { expression: string; alias: string } | null {
-  const trimmed = expr.trim();
-  const upper = trimmed.toUpperCase();
-
-  // Walk backwards through the expression to find the last top-level AS keyword
-  let depth = 0;
-  let caseDepth = 0;
-  let lastAsPos = -1;
-
-  for (let i = 0; i < trimmed.length; i++) {
-    const ch = trimmed[i];
-    if (ch === "(") { depth++; continue; }
-    if (ch === ")") { depth--; continue; }
-
-    const remaining = upper.substring(i);
-    if (depth === 0) {
-      if (remaining.startsWith("CASE")) {
-        const after = trimmed[i + 4];
-        if (!after || /\s/.test(after)) caseDepth++;
-      }
-      if (remaining.startsWith("END")) {
-        const after = trimmed[i + 3];
-        if (!after || /\s/.test(after)) {
-          if (caseDepth > 0) caseDepth--;
-        }
-      }
-    }
-
-    if (depth === 0 && caseDepth === 0 && remaining.match(/^AS\s/i)) {
-      // Verify it's a word boundary before AS
-      if (i === 0 || /\s/.test(trimmed[i - 1])) {
-        lastAsPos = i;
-      }
-    }
-  }
-
-  if (lastAsPos === -1) return null;
-
-  const beforeAs = trimmed.substring(0, lastAsPos).trim();
-  const afterAs = trimmed.substring(lastAsPos + 2).trim();
-
-  let alias = afterAs;
-  if (alias.startsWith("[") && alias.endsWith("]")) {
-    alias = alias.substring(1, alias.length - 1);
-  } else if (alias.startsWith('"') && alias.endsWith('"')) {
-    alias = alias.substring(1, alias.length - 1);
-  }
-
-  if (!alias) return null;
-
-  return { expression: beforeAs, alias };
+  const fromIdx = findTopLevelKeyword(sql, "FROM", start);
+  return (fromIdx === -1 ? sql.substring(start) : sql.substring(start, fromIdx)).trim();
 }
 
 export function extractDestQueryAliases(sql: string): DestQueryParseResult {
@@ -236,7 +70,7 @@ export function extractDestQueryAliases(sql: string): DestQueryParseResult {
   const parts = splitTopLevelCommas(selectClause);
 
   for (const part of parts) {
-    const result = extractAlias(part);
+    const result = splitTrailingAlias(part);
     if (!result) {
       warnings.push(`Could not extract alias from expression: ${part.substring(0, 80)}`);
       continue;

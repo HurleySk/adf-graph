@@ -1,4 +1,5 @@
-import { extractTablesFromSql } from "./parseResult.js";
+import { extractAllTablesFromSql } from "./parseResult.js";
+import { parenDepthMap } from "./sqlLex.js";
 
 export interface FilterCondition {
   column: string;
@@ -14,17 +15,14 @@ export interface WhereClause {
   conditions: FilterCondition[];
 }
 
+function firstTableIn(sql: string): string | undefined {
+  return extractAllTablesFromSql(sql)[0]?.table;
+}
+
 export function extractWhereClause(sql: string): WhereClause | null {
   const upper = sql.toUpperCase();
 
-  // Pre-compute parenthesis depth at each character position
-  const depth = new Int8Array(sql.length);
-  let d = 0;
-  for (let i = 0; i < sql.length; i++) {
-    if (sql[i] === "(") d++;
-    depth[i] = d;
-    if (sql[i] === ")") d--;
-  }
+  const depth = parenDepthMap(sql);
 
   // Find WHERE at depth 0
   let whereStart = -1;
@@ -74,7 +72,7 @@ export function extractWhereClause(sql: string): WhereClause | null {
   return { raw, conditions };
 }
 
-function parseConditions(whereText: string, depthMap: Int8Array): FilterCondition[] {
+function parseConditions(whereText: string, depthMap: Int16Array): FilterCondition[] {
   const conditions: FilterCondition[] = [];
   const upper = whereText.toUpperCase();
 
@@ -153,6 +151,8 @@ function parseOneCondition(text: string, connector: string): FilterCondition {
 
   // Try common patterns: col OP value
   const patterns: Array<{ regex: RegExp; opName: string }> = [
+    { regex: /^(NOT\s+EXISTS)\s*(\([\s\S]*\))$/i, opName: "NOT EXISTS" },
+    { regex: /^(EXISTS)\s*(\([\s\S]*\))$/i, opName: "EXISTS" },
     { regex: /^(.+?)\s+(NOT\s+IN)\s*(\([\s\S]*\))$/i, opName: "NOT IN" },
     { regex: /^(.+?)\s+(IN)\s*(\([\s\S]*\))$/i, opName: "IN" },
     { regex: /^(.+?)\s+(NOT\s+LIKE)\s+(.+)$/i, opName: "NOT LIKE" },
@@ -162,8 +162,6 @@ function parseOneCondition(text: string, connector: string): FilterCondition {
     { regex: /^(.+?)\s+(NOT\s+BETWEEN)\s+(.+)$/i, opName: "NOT BETWEEN" },
     { regex: /^(.+?)\s+(BETWEEN)\s+(.+)$/i, opName: "BETWEEN" },
     { regex: /^(.+?)\s*(<>|!=|>=|<=|>|<|=)\s*(.+)$/i, opName: "" },
-    { regex: /^(NOT\s+EXISTS)\s*(\([\s\S]*\))$/i, opName: "NOT EXISTS" },
-    { regex: /^(EXISTS)\s*(\([\s\S]*\))$/i, opName: "EXISTS" },
   ];
 
   for (const { regex, opName } of patterns) {
@@ -172,13 +170,12 @@ function parseOneCondition(text: string, connector: string): FilterCondition {
 
     if (opName === "EXISTS" || opName === "NOT EXISTS") {
       const subqueryText = match[2];
-      const tables = extractTablesFromSql(subqueryText);
       return {
         column: "",
         operator: opName,
         value: subqueryText.trim(),
         isSubquery: true,
-        subqueryTable: tables[0],
+        subqueryTable: firstTableIn(subqueryText),
         connector,
       };
     }
@@ -192,17 +189,7 @@ function parseOneCondition(text: string, connector: string): FilterCondition {
     }
 
     const isSubquery = /\(\s*SELECT\b/i.test(value);
-    let subqueryTable: string | undefined;
-    if (isSubquery) {
-      // Extract table from subquery — try schema.table first, then unqualified
-      const schemaMatch = value.match(/FROM\s+\[?(\w+)\]?\.\[?(\w+)\]?/i);
-      if (schemaMatch) {
-        subqueryTable = `${schemaMatch[1]}.${schemaMatch[2]}`;
-      } else {
-        const unqualified = value.match(/FROM\s+\[?(\w+)\]?/i);
-        if (unqualified) subqueryTable = unqualified[1];
-      }
-    }
+    const subqueryTable = isSubquery ? firstTableIn(value) : undefined;
 
     return { column, operator, value, isSubquery, subqueryTable, connector };
   }

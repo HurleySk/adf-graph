@@ -27,6 +27,8 @@ export interface SpParseResult {
   confidence: "high" | "medium" | "low";
 }
 
+import { stripSqlComments, splitTopLevelCommas } from "./sqlLex.js";
+
 /* ──────────────────────────── helpers ──────────────────────────── */
 
 /** Strip square brackets and optional schema prefix whitespace. */
@@ -80,43 +82,63 @@ function isSimpleColumnRef(expr: string): boolean {
   return /^(?:\[?\w+\]?\.)*\[?\w+\]?$/.test(expr.trim());
 }
 
-/**
- * Split a comma-separated column list while respecting parenthesized expressions.
- * E.g. `a, UPPER(LTRIM(b)), c` → [`a`, `UPPER(LTRIM(b))`, `c`]
- */
-function splitColumnList(text: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = "";
-  for (const ch of text) {
-    if (ch === "(") {
-      depth++;
-      current += ch;
-    } else if (ch === ")") {
-      depth--;
-      current += ch;
-    } else if (ch === "," && depth === 0) {
-      parts.push(current.trim());
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  if (current.trim()) {
-    parts.push(current.trim());
-  }
-  return parts;
+function stripCommentsAndStrings(sql: string): string {
+  return stripSqlComments(sql).replace(/'[^']*'/g, "''");
 }
 
-/** Strip inline/block comments and string literals to simplify regex matching. */
-function stripCommentsAndStrings(sql: string): string {
-  // Remove block comments
-  let result = sql.replace(/\/\*[\s\S]*?\*\//g, " ");
-  // Remove single-line comments
-  result = result.replace(/--[^\r\n]*/g, " ");
-  // Replace string literals with empty string placeholders
-  result = result.replace(/'[^']*'/g, "''");
-  return result;
+type StatementResult = {
+  mappings: SpColumnMapping[];
+  readTables: string[];
+  writeTables: string[];
+  parsed: number;
+};
+
+function pushMapping(
+  mappings: SpColumnMapping[],
+  sourceTable: string,
+  targetTable: string,
+  targetColumn: string,
+  rawExpr: string,
+): void {
+  const expr = rawExpr.trim();
+  const sourceColumn = extractInnermostColumn(expr);
+  if (/^\d+$/.test(sourceColumn) || sourceColumn === "") return;
+  mappings.push({
+    sourceTable,
+    sourceColumn,
+    targetTable,
+    targetColumn,
+    ...(!isSimpleColumnRef(expr) ? { transformExpression: expr } : {}),
+  });
+}
+
+function pushSetAssignments(
+  mappings: SpColumnMapping[],
+  setClause: string,
+  sourceTable: string,
+  targetTable: string,
+): void {
+  for (const assignment of splitTopLevelCommas(setClause)) {
+    const eqIdx = assignment.indexOf("=");
+    if (eqIdx === -1) continue;
+    const targetColumn = normalizeName(assignment.slice(0, eqIdx).trim()).split(".").pop()!;
+    pushMapping(mappings, sourceTable, targetTable, targetColumn, assignment.slice(eqIdx + 1));
+  }
+}
+
+function pushPositional(
+  mappings: SpColumnMapping[],
+  colList: string,
+  exprList: string,
+  sourceTable: string,
+  targetTable: string,
+): void {
+  const cols = splitTopLevelCommas(colList);
+  const exprs = splitTopLevelCommas(exprList);
+  const count = Math.min(cols.length, exprs.length);
+  for (let i = 0; i < count; i++) {
+    pushMapping(mappings, sourceTable, targetTable, normalizeName(cols[i]), exprs[i]);
+  }
 }
 
 /**
@@ -132,12 +154,7 @@ const QUALIFIED_IDENT = `(?:${IDENT}\\.)*${IDENT}`;
 /**
  * Parse UPDATE <table> SET <col> = <expr>, … [FROM <tables>]
  */
-function parseUpdateStatements(sql: string): {
-  mappings: SpColumnMapping[];
-  readTables: string[];
-  writeTables: string[];
-  parsed: number;
-} {
+function parseUpdateStatements(sql: string): StatementResult {
   const mappings: SpColumnMapping[] = [];
   const readTables: string[] = [];
   const writeTables: string[] = [];
@@ -172,26 +189,7 @@ function parseUpdateStatements(sql: string): {
       }
     }
 
-    // Parse SET assignments: col = expr, col = expr, …
-    const assignments = splitColumnList(setClause);
-    for (const assignment of assignments) {
-      const eqIdx = assignment.indexOf("=");
-      if (eqIdx === -1) continue;
-      const targetColumn = normalizeName(assignment.slice(0, eqIdx).trim());
-      const expr = assignment.slice(eqIdx + 1).trim();
-      const sourceColumn = extractInnermostColumn(expr);
-
-      // Skip literal values / non-column expressions
-      if (/^\d+$/.test(sourceColumn) || sourceColumn === "") continue;
-
-      mappings.push({
-        sourceTable: targetTable, // self-update unless we can determine differently
-        sourceColumn,
-        targetTable,
-        targetColumn,
-        ...(!isSimpleColumnRef(expr) ? { transformExpression: expr } : {}),
-      });
-    }
+    pushSetAssignments(mappings, setClause, targetTable, targetTable);
   }
 
   return { mappings, readTables, writeTables, parsed };
@@ -200,12 +198,7 @@ function parseUpdateStatements(sql: string): {
 /**
  * Parse INSERT INTO <table> (<cols>) SELECT <cols> FROM <table>
  */
-function parseInsertSelectStatements(sql: string): {
-  mappings: SpColumnMapping[];
-  readTables: string[];
-  writeTables: string[];
-  parsed: number;
-} {
+function parseInsertSelectStatements(sql: string): StatementResult {
   const mappings: SpColumnMapping[] = [];
   const readTables: string[] = [];
   const writeTables: string[] = [];
@@ -219,31 +212,13 @@ function parseInsertSelectStatements(sql: string): {
   let match: RegExpExecArray | null;
   while ((match = insertRegex.exec(sql)) !== null) {
     const targetTable = normalizeTable(match[1]);
-    const insertCols = splitColumnList(match[2]);
-    const selectExprs = splitColumnList(match[3]);
     const sourceTable = normalizeTable(match[4]);
 
     writeTables.push(targetTable);
     readTables.push(sourceTable);
     parsed++;
 
-    // Positional mapping
-    const count = Math.min(insertCols.length, selectExprs.length);
-    for (let i = 0; i < count; i++) {
-      const targetColumn = normalizeName(insertCols[i]);
-      const expr = selectExprs[i].trim();
-      const sourceColumn = extractInnermostColumn(expr);
-
-      if (/^\d+$/.test(sourceColumn) || sourceColumn === "") continue;
-
-      mappings.push({
-        sourceTable,
-        sourceColumn,
-        targetTable,
-        targetColumn,
-        ...(!isSimpleColumnRef(expr) ? { transformExpression: expr.trim() } : {}),
-      });
-    }
+    pushPositional(mappings, match[2], match[3], sourceTable, targetTable);
   }
 
   return { mappings, readTables, writeTables, parsed };
@@ -254,12 +229,7 @@ function parseInsertSelectStatements(sql: string): {
  *   WHEN MATCHED THEN UPDATE SET …
  *   WHEN NOT MATCHED THEN INSERT (<cols>) VALUES (<vals>)
  */
-function parseMergeStatements(sql: string): {
-  mappings: SpColumnMapping[];
-  readTables: string[];
-  writeTables: string[];
-  parsed: number;
-} {
+function parseMergeStatements(sql: string): StatementResult {
   const mappings: SpColumnMapping[] = [];
   const readTables: string[] = [];
   const writeTables: string[] = [];
@@ -287,29 +257,7 @@ function parseMergeStatements(sql: string): {
       /\bWHEN\s+MATCHED\s+THEN\s+UPDATE\s+SET\s+([\s\S]*?)(?=\bWHEN\b|;|\bEND\b|$)/gi;
     let whenMatch: RegExpExecArray | null;
     while ((whenMatch = whenMatchedRegex.exec(restOfMerge)) !== null) {
-      const setClause = whenMatch[1];
-      const assignments = splitColumnList(setClause);
-      for (const assignment of assignments) {
-        const eqIdx = assignment.indexOf("=");
-        if (eqIdx === -1) continue;
-        let targetColumn = normalizeName(assignment.slice(0, eqIdx).trim());
-        const expr = assignment.slice(eqIdx + 1).trim();
-        const sourceColumn = extractInnermostColumn(expr);
-
-        // Strip alias prefix from target (e.g. t.col → col)
-        const targetDotParts = targetColumn.split(".");
-        targetColumn = targetDotParts[targetDotParts.length - 1];
-
-        if (/^\d+$/.test(sourceColumn) || sourceColumn === "") continue;
-
-        mappings.push({
-          sourceTable,
-          sourceColumn,
-          targetTable,
-          targetColumn,
-          ...(!isSimpleColumnRef(expr) ? { transformExpression: expr } : {}),
-        });
-      }
+      pushSetAssignments(mappings, whenMatch[1], sourceTable, targetTable);
     }
 
     // Parse WHEN NOT MATCHED THEN INSERT (cols) VALUES (vals)
@@ -317,24 +265,7 @@ function parseMergeStatements(sql: string): {
       /\bWHEN\s+NOT\s+MATCHED\s+(?:BY\s+TARGET\s+)?THEN\s+INSERT\s*\(\s*([\s\S]*?)\s*\)\s*VALUES\s*\(\s*([\s\S]*?)\s*\)/gi;
     let notMatch: RegExpExecArray | null;
     while ((notMatch = whenNotMatchedRegex.exec(restOfMerge)) !== null) {
-      const insertCols = splitColumnList(notMatch[1]);
-      const valueExprs = splitColumnList(notMatch[2]);
-      const count = Math.min(insertCols.length, valueExprs.length);
-      for (let i = 0; i < count; i++) {
-        const targetColumn = normalizeName(insertCols[i]);
-        const expr = valueExprs[i].trim();
-        const sourceColumn = extractInnermostColumn(expr);
-
-        if (/^\d+$/.test(sourceColumn) || sourceColumn === "") continue;
-
-        mappings.push({
-          sourceTable,
-          sourceColumn,
-          targetTable,
-          targetColumn,
-          ...(!isSimpleColumnRef(expr) ? { transformExpression: expr } : {}),
-        });
-      }
+      pushPositional(mappings, notMatch[1], notMatch[2], sourceTable, targetTable);
     }
   }
 
@@ -368,26 +299,16 @@ export function parseSpBody(spName: string, sql: string): SpParseResult {
   const mergeCount = (cleaned.match(/\bMERGE\b/gi) ?? []).length;
   totalStatements = standaloneUpdateCount + insertIntoCount + mergeCount;
 
-  // Parse UPDATE statements
-  const updateResult = parseUpdateStatements(cleaned);
-  allMappings.push(...updateResult.mappings);
-  updateResult.readTables.forEach((t) => readTables.add(t));
-  updateResult.writeTables.forEach((t) => writeTables.add(t));
-  parsedStatements += updateResult.parsed;
-
-  // Parse INSERT…SELECT statements
-  const insertResult = parseInsertSelectStatements(cleaned);
-  allMappings.push(...insertResult.mappings);
-  insertResult.readTables.forEach((t) => readTables.add(t));
-  insertResult.writeTables.forEach((t) => writeTables.add(t));
-  parsedStatements += insertResult.parsed;
-
-  // Parse MERGE statements
-  const mergeResult = parseMergeStatements(cleaned);
-  allMappings.push(...mergeResult.mappings);
-  mergeResult.readTables.forEach((t) => readTables.add(t));
-  mergeResult.writeTables.forEach((t) => writeTables.add(t));
-  parsedStatements += mergeResult.parsed;
+  for (const result of [
+    parseUpdateStatements(cleaned),
+    parseInsertSelectStatements(cleaned),
+    parseMergeStatements(cleaned),
+  ]) {
+    allMappings.push(...result.mappings);
+    result.readTables.forEach((t) => readTables.add(t));
+    result.writeTables.forEach((t) => writeTables.add(t));
+    parsedStatements += result.parsed;
+  }
 
   // Determine confidence
   let confidence: "high" | "medium" | "low";
