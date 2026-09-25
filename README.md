@@ -58,6 +58,24 @@ Environments can have an optional `overlays` array to layer local or in-progress
 - Runtime overlays can be added/removed via MCP tools (`graph_add_overlay`, `graph_remove_overlay`).
 - Runtime additions are ephemeral (lost on server restart).
 
+### Scope roots
+
+`scopeRoots` sets the root orchestrator pipelines that `graph_generate_scope` walks when no `roots` argument is given:
+
+```json
+{
+  "environments": {
+    "work-repo": {
+      "path": "C:/repos/work-repo",
+      "default": true,
+      "scopeRoots": ["onprem_NightlyOrganizationLoad_v2", "onprem_Orchestration_DeltaLoad"]
+    }
+  }
+}
+```
+
+Resolution order: the tool's `roots` argument, then the environment's `scopeRoots` (merged `+overlays` views use the base environment's), then the built-in Wave 3 roots.
+
 ## MCP Configuration
 
 ### Single environment (ADF_ROOT)
@@ -141,12 +159,15 @@ Compares a pipeline's structure across two named environments. Reports added, re
 src/
   config.ts          # Config loader (ADF_CONFIG / adf-graph.json / ADF_ROOT)
   server.ts          # MCP server entry point
+  registerTools.ts   # MCP tool registration (tool/envTool helpers)
   graph/
     model.ts         # Graph, NodeType, EdgeType definitions
     builder.ts       # Builds graph from a root path
     staleness.ts     # Mtime-based cache invalidation
     manager.ts       # Multi-environment graph manager
     overlay.ts       # Overlay scanning and graph merge
+    nodeMetadata.ts  # Typed node/edge metadata accessors
+    traversalUtils.ts # Shared traversal helpers
   tools/
     stats.ts         # graph_stats handler
     consumers.ts     # graph_find_consumers handler
@@ -161,6 +182,7 @@ src/
     dataset.ts       # ADF dataset JSON parser
     columns.ts       # Column mapping extractor
     sql.ts           # SQL stored procedure parser
+    sqlLex.ts        # Shared SQL lexing helpers
 tests/
   graph/             # Graph model unit tests
   parsers/           # Parser unit tests

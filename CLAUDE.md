@@ -16,9 +16,14 @@ MCP server that builds a queryable dependency graph from ADF pipeline artifacts.
 - `src/graph/staleness.ts` — File mtime tracking, rebuild-if-stale (multi-path aware)
 - `src/graph/overlay.ts` — Artifact type detection, overlay scanning (structured + loose), graph merge
 - `src/graph/manager.ts` — Multi-environment graph manager (lazy build, per-env staleness, schema staleness, overlay merge views)
+- `src/graph/nodeMetadata.ts` - Typed accessors for node/edge metadata (activity, table, SP, entity, linked service, column mapping); use these instead of `metadata.x as T` casts
+- `src/graph/traversalUtils.ts` - Shared traversal helpers (contained activities, child pipeline calls)
 - `src/parsers/` — One parser per artifact type (pipeline, dataset, sql, columns, dataverseSchema, trigger, integrationRuntime)
+- `src/parsers/sqlLex.ts` - Shared SQL lexing (comment stripping, paren/CASE depth, top-level comma split, identifier unquoting); all SQL parsers build on it
 - `src/tools/` — One file per MCP tool (describe, describeEntity, describeStoredProcedure, describeTable, describeTrigger, describeIntegrationRuntime, environmentConfig, spBody, lineage, search, diff, impact, consumers, paths, stats, validate, deployReadiness, overlay/env management)
-- `src/server.ts` — MCP server entry point, tool registration
+- `src/tools/toolUtils.ts` - Shared tool helpers (`resolveNode` name matching, entity schema detail, dest_query target iteration)
+- `src/registerTools.ts` - Tool registration via `tool()` / `envTool()`; `envTool` adds the `environment` param and resolves graph, schemaPath and see-also once. Handler exceptions (including unknown environments) return `{ error }` with `isError: true`
+- `src/server.ts` — MCP server entry point
 
 ## Configuration
 
@@ -91,6 +96,24 @@ Environments can have an optional `overlays` array to layer local/in-progress fi
 - Runtime overlays can be added/removed via MCP tools (`graph_add_overlay`, `graph_remove_overlay`).
 - Runtime environments can be registered via `graph_add_environment`.
 - Runtime additions are ephemeral (lost on server restart).
+
+### Scope roots
+
+`scopeRoots` sets the root orchestrator pipelines that `graph_generate_scope` walks when no `roots` argument is given:
+
+```json
+{
+  "environments": {
+    "work-repo": {
+      "path": "C:/repos/work-repo",
+      "default": true,
+      "scopeRoots": ["onprem_NightlyOrganizationLoad_v2", "onprem_Orchestration_DeltaLoad"]
+    }
+  }
+}
+```
+
+Resolution order: the tool's `roots` argument, then the environment's `scopeRoots` (merged `+overlays` views use the base environment's), then the built-in Wave 3 roots.
 
 ### Priority
 
