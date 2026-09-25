@@ -5,6 +5,32 @@ describe("parseSpBody", () => {
   /* ───────── UPDATE ───────── */
 
   describe("UPDATE statements", () => {
+    it("reads only FROM/JOIN table references, not aliases or ON-clause keywords", () => {
+      const sql = `
+        UPDATE s
+        SET s.code = CAST(m.code AS varchar(10))
+        FROM dbo.Staging s
+        INNER JOIN dbo.Matches AS m ON m.id = s.id AND m.kind IS NOT NULL
+        LEFT JOIN (SELECT id FROM dbo.Extra) x ON x.id = s.id OR x.id IS NULL
+        WHERE s.active = 1;
+      `;
+      const result = parseSpBody("p_Update_From_Join", sql);
+      expect(result.readTables.sort()).toEqual(["dbo.Extra", "dbo.Matches", "dbo.Staging"]);
+    });
+
+    it("reads comma-joined tables but not subquery select-list columns", () => {
+      const sql = `
+        UPDATE target
+        SET target.code = source.code
+        FROM dbo.Target_Staging as target,
+        dbo.Source_Staging as source,
+        (SELECT id, code FROM dbo.Lookup) lk
+        WHERE target.id = source.id AND lk.id = source.id;
+      `;
+      const result = parseSpBody("p_Update_Comma_Join", sql);
+      expect(result.readTables.sort()).toEqual(["dbo.Lookup", "dbo.Source_Staging", "dbo.Target_Staging"]);
+    });
+
     it("extracts simple UPDATE SET assignments", () => {
       const sql = `
         CREATE PROCEDURE [dbo].[p_Simple_Update]

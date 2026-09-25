@@ -27,7 +27,7 @@ export interface SpParseResult {
   confidence: "high" | "medium" | "low";
 }
 
-import { stripSqlComments, splitTopLevelCommas } from "./sqlLex.js";
+import { stripSqlComments, splitTopLevelCommas, parenDepthMap } from "./sqlLex.js";
 
 /* ──────────────────────────── helpers ──────────────────────────── */
 
@@ -178,12 +178,14 @@ function parseUpdateStatements(sql: string): StatementResult {
     const afterSet = sql.slice(match.index + match[0].length);
     const fromMatch = /^\s*(?:WHERE[\s\S]*?)?\bFROM\s+([\s\S]*?)(?=\bWHERE\b|;|\bEND\b|$)/i.exec(afterSet);
     if (fromMatch) {
-      const fromClause = fromMatch[1];
-      const tableRefs =
-        fromClause.match(/(?:\[?\w+\]?\.)*\[?\w+\]?/g) ?? [];
-      for (const ref of tableRefs) {
-        const t = normalizeTable(ref);
-        if (t && !t.match(/^\d+$/) && t !== targetTable) {
+      const sourceRegex = new RegExp(`(^|\\b(?:FROM|JOIN|APPLY)\\s+|,\\s*)(${QUALIFIED_IDENT})`, "gi");
+      const fromClause = fromMatch[1].trim();
+      const depth = parenDepthMap(fromClause);
+      let ref: RegExpExecArray | null;
+      while ((ref = sourceRegex.exec(fromClause)) !== null) {
+        if (ref[1].startsWith(",") && depth[ref.index] !== 0) continue;
+        const t = normalizeTable(ref[2]);
+        if (t && !/^\d+$/.test(t) && !/^select$/i.test(t) && t !== targetTable) {
           readTables.push(t);
         }
       }
