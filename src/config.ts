@@ -7,6 +7,7 @@ export interface EnvironmentConfig {
   default?: boolean;
   overlays?: string[];
   schemaPath?: string;
+  scopeRoots?: string[];
 }
 
 export interface AdfGraphConfig {
@@ -122,11 +123,21 @@ function validateConfig(raw: unknown, source: string): AdfGraphConfig {
       }
       schemaPath = envObj.schemaPath;
     }
+    let scopeRoots: string[] | undefined;
+    if (envObj.scopeRoots !== undefined) {
+      if (!Array.isArray(envObj.scopeRoots) || envObj.scopeRoots.some((r) => typeof r !== "string" || !r)) {
+        throw new Error(
+          `adf-graph: environment '${name}' in '${source}': scopeRoots must be an array of non-empty strings`,
+        );
+      }
+      scopeRoots = envObj.scopeRoots as string[];
+    }
     environments[name] = {
       path: envObj.path,
       ...(envObj.default === true ? { default: true } : {}),
       ...(overlays ? { overlays } : {}),
       ...(schemaPath ? { schemaPath } : {}),
+      ...(scopeRoots ? { scopeRoots } : {}),
     };
   }
   if (Object.keys(environments).length === 0) {

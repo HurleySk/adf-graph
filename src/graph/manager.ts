@@ -116,6 +116,10 @@ export class GraphManager {
     return this.resolveSchemaPath(envName);
   }
 
+  getScopeRoots(envName: string): string[] | undefined {
+    return this.config.environments[this.baseEnvName(envName)]?.scopeRoots;
+  }
+
   /** Return the root filesystem path for an environment. */
   getEnvironmentPath(envName: string): string {
     return this.resolveEnvPath(envName) ?? "";
@@ -317,10 +321,12 @@ export class GraphManager {
   }
 
   /** Resolve the schemaPath for an environment (config takes priority over runtime). */
+  private baseEnvName(envName: string): string {
+    return envName.endsWith(OVERLAY_SUFFIX) ? envName.slice(0, -OVERLAY_SUFFIX.length) : envName;
+  }
+
   private resolveSchemaPath(envName: string): string | undefined {
-    const baseName = envName.endsWith(OVERLAY_SUFFIX)
-      ? envName.slice(0, -OVERLAY_SUFFIX.length)
-      : envName;
+    const baseName = this.baseEnvName(envName);
     const cfg = this.config.environments[baseName];
     if (cfg?.schemaPath) return cfg.schemaPath;
     const rt = this.runtimeEnvs.get(baseName);
