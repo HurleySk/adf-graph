@@ -1,0 +1,43 @@
+{
+  "name": "Copy_Sql_Override",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy Litigation Settlement",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlServerSource",
+            "sqlReaderQuery": "SELECT settlement_id, amount FROM dbo.litigation_settlement WHERE is_active = 1"
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_sql_source",
+            "type": "DatasetReference",
+            "parameters": {
+              "schema_name": "dbo",
+              "table_name": "Commission_Meeting"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_sql_staging",
+            "type": "DatasetReference",
+            "parameters": {
+              "schema_name": "dbo",
+              "table_name": "Litigation_Settlement_Staging"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": []
+  }
+}
