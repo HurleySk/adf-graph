@@ -339,6 +339,13 @@ function parseMergeStatements(sql: string): StatementResult {
   return { mappings, readTables, writeTables, parsed };
 }
 
+function collectCteNames(sql: string): Set<string> {
+  const names = new Set<string>();
+  const re = /(?:\bWITH|\)\s*,)\s*\[?(\w+)\]?\s*(?:\([^()]*\)\s*)?AS\s*\(/gi;
+  for (const m of sql.matchAll(re)) names.add(m[1].toLowerCase());
+  return names;
+}
+
 /* ──────────────────────────── main entry point ──────────────────────────── */
 
 export function parseSpBody(spName: string, sql: string): SpParseResult {
@@ -377,6 +384,9 @@ export function parseSpBody(spName: string, sql: string): SpParseResult {
     parsedStatements += result.parsed;
   }
 
+  const cteNames = collectCteNames(cleaned);
+  const notCte = (t: string) => !cteNames.has(t.toLowerCase());
+
   // Determine confidence
   let confidence: "high" | "medium" | "low";
   if (hasDynamicSql) {
@@ -395,8 +405,8 @@ export function parseSpBody(spName: string, sql: string): SpParseResult {
   return {
     storedProcedure: spName,
     mappings: allMappings,
-    readTables: [...readTables],
-    writeTables: [...writeTables],
+    readTables: [...readTables].filter(notCte),
+    writeTables: [...writeTables].filter(notCte),
     warnings,
     confidence,
   };

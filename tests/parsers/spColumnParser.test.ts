@@ -377,4 +377,21 @@ END`;
       expect(mapping!.transformExpression).toContain("UPPER");
     });
   });
+
+  describe("CTEs", () => {
+    it("excludes CTE names from read and write tables", () => {
+      const sql = `
+;WITH P0 AS (SELECT id, name FROM dbo.Staff),
+[Ranked] (id, name) AS (SELECT id, name FROM P0 JOIN dbo.Roster r ON r.id = P0.id)
+INSERT INTO dbo.Matches (id, name)
+SELECT id, name FROM ranked;
+UPDATE t SET t.flag = 1 FROM dbo.Target t JOIN P0 ON P0.id = t.id;`;
+      const result = parseSpBody("p_Cte", sql);
+      const lower = (xs: string[]) => xs.map((x) => x.toLowerCase());
+      expect(lower(result.readTables)).not.toContain("p0");
+      expect(lower(result.readTables)).not.toContain("ranked");
+      expect(result.writeTables).toContain("dbo.Matches");
+      expect(result.writeTables).toContain("dbo.Target");
+    });
+  });
 });
