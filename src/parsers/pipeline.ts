@@ -1,10 +1,8 @@
 import { GraphNode, GraphEdge, NodeType } from "../graph/model.js";
-import { ParseResult, extractTablesFromSql, extractAllTablesFromSql } from "./parseResult.js";
+import { ParseResult, extractTablesFromSql } from "./parseResult.js";
 import { parseActivity } from "./activities/index.js";
 import { makePipelineId } from "../utils/nodeId.js";
 
-// Re-export for backward compatibility -- other files import these from pipeline.ts
-export { ParseResult, extractTablesFromSql, extractAllTablesFromSql };
 
 export function parsePipelineFile(json: unknown): ParseResult {
   const nodes: GraphNode[] = [];

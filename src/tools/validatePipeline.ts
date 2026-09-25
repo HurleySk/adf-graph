@@ -38,7 +38,7 @@ export interface ValidatePipelineResult {
   error?: string;
 }
 
-export function classifyAlias(
+function classifyAlias(
   alias: string,
   entityAttrs: Set<string> | null,
 ): ColumnValidation {
@@ -55,7 +55,7 @@ export function classifyAlias(
   return { alias, status: entityAttrs.has(aliasLower) ? "valid" : "invalid" };
 }
 
-export function validateDestQueryActivity(
+function validateDestQueryActivity(
   graph: Graph,
   activityNode: GraphNode,
   schemaPath?: string,
@@ -87,7 +87,7 @@ export function validateDestQueryActivity(
   };
 }
 
-export function validatePipelineDefaults(
+function validatePipelineDefaults(
   graph: Graph,
   pipelineNode: GraphNode,
   schemaPath?: string,

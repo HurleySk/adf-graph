@@ -7,10 +7,6 @@ export interface ParameterDef {
   defaultValue: unknown;
 }
 
-export interface PipelineMetadata {
-  parameters: ParameterDef[];
-}
-
 export interface ActivityMetadata {
   activityType: string;
   sqlQuery?: string;

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { parsePipelineFile, extractTablesFromSql, extractAllTablesFromSql } from "../../src/parsers/pipeline.js";
+import { parsePipelineFile } from "../../src/parsers/pipeline.js";
+import { extractTablesFromSql, extractAllTablesFromSql } from "../../src/parsers/parseResult.js";
 
 const fixtureDir = join(import.meta.dirname, "../fixtures/pipeline");
 
