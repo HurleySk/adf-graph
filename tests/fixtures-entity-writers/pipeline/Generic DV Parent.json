@@ -1,0 +1,23 @@
+{
+  "name": "Generic DV Parent",
+  "properties": {
+    "activities": [
+      {
+        "name": "Run Child For Employee",
+        "type": "ExecutePipeline",
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Generic DV Child",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "dv_entity": "alm_employee",
+            "read_entity": "pcx_workpackage"
+          }
+        }
+      }
+    ],
+    "parameters": {}
+  }
+}

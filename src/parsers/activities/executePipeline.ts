@@ -94,7 +94,7 @@ export function parseExecutePipeline(
         from: activityNode.id,
         to: makeEntityId(dvEntityName),
         type: EdgeType.WritesTo,
-        metadata: {},
+        metadata: { inferredFromParameter: "dataverse_entity_name" },
       });
     }
   }

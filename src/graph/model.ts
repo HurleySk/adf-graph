@@ -248,6 +248,13 @@ export class Graph {
     else this.typeIndex.set(node.type, [node]);
   }
 
+  removeEdge(edge: GraphEdge): void {
+    const out = this.outgoing.get(edge.from);
+    if (out) this.outgoing.set(edge.from, out.filter((e) => e !== edge));
+    const inc = this.incoming.get(edge.to);
+    if (inc) this.incoming.set(edge.to, inc.filter((e) => e !== edge));
+  }
+
   removeOutgoingEdgesForNode(id: string): void {
     const outgoing = this.outgoing.get(id) ?? [];
     for (const edge of outgoing) {

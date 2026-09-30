@@ -1,0 +1,9 @@
+{
+  "name": "ds_dynamic_dataverse_usgovva",
+  "properties": {
+    "linkedServiceName": { "referenceName": "LS_DYNAMIC", "type": "LinkedServiceReference" },
+    "parameters": { "target_entity": { "type": "string" }, "service_uri": { "type": "string" } },
+    "type": "CommonDataServiceForAppsEntity",
+    "typeProperties": { "entityName": { "value": "@dataset().target_entity", "type": "Expression" } }
+  }
+}

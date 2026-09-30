@@ -31,6 +31,7 @@ export function parseDatasetFile(json: unknown): ParseResult {
     metadata: {
       datasetType: datasetType ?? null,
       parameters,
+      ...(typeProperties?.entityName !== undefined ? { entityName: typeProperties.entityName } : {}),
     },
   });
 

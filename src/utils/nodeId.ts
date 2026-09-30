@@ -9,7 +9,7 @@ export function makeTableId(schema: string, table: string): string {
 }
 
 export function makeEntityId(name: string): string {
-  return makeNodeId(NodeType.DataverseEntity, name);
+  return makeNodeId(NodeType.DataverseEntity, name.toLowerCase());
 }
 
 export function makePipelineId(name: string): string {

@@ -1,0 +1,64 @@
+{
+  "name": "Read Entities",
+  "properties": {
+    "activities": [
+      {
+        "name": "Fetch Work Packages",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "CommonDataServiceForAppsSource",
+            "query": "<fetch><entity name=\"pcx_workpackage\"><attribute name=\"pcx_name\"/></entity></fetch>"
+          },
+          "sink": {
+            "type": "CommonDataServiceForAppsSink",
+            "writeBehavior": "upsert",
+            "ignoreNullValues": false,
+            "alternateKeyName": "alm_atmsaljrslidfk"
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_dataverseindividual_usgovva_01",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_azuresql_usgovva_01",
+            "type": "DatasetReference",
+            "parameters": {
+              "schema_name": "dbo",
+              "table_name": "WP"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Lookup Employee",
+        "type": "Lookup",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "CommonDataServiceForAppsSource"
+          },
+          "dataset": {
+            "referenceName": "ds_dataverse_usgovva_01",
+            "type": "DatasetReference",
+            "parameters": {
+              "entity_name": "alm_employee"
+            }
+          },
+          "firstRowOnly": false
+        }
+      }
+    ],
+    "parameters": {}
+  }
+}

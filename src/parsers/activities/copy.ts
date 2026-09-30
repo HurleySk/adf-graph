@@ -58,7 +58,7 @@ export function parseCopyActivity(
       from: activityId,
       to: makeDatasetId(refName),
       type: EdgeType.UsesDataset,
-      metadata: { direction: "input" },
+      metadata: { direction: "input", parameters: i.parameters ?? {} },
     });
 
     const params = i.parameters as Record<string, unknown> | undefined;
@@ -75,7 +75,7 @@ export function parseCopyActivity(
       from: activityId,
       to: makeDatasetId(refName),
       type: EdgeType.UsesDataset,
-      metadata: { direction: "output" },
+      metadata: { direction: "output", parameters: o.parameters ?? {} },
     });
 
     const params = o.parameters as Record<string, unknown> | undefined;

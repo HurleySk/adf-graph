@@ -1,0 +1,85 @@
+{
+  "name": "Load Contacts Hardcoded",
+  "properties": {
+    "activities": [
+      {
+        "name": "Upsert Contacts",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "select first_name as alm_firstname, alj_rsl_id as alm_atmsaljrslidfk from ALJ_rsl_Staging"
+          },
+          "sink": {
+            "type": "CommonDataServiceForAppsSink",
+            "writeBehavior": "upsert",
+            "ignoreNullValues": false,
+            "alternateKeyName": "alm_atmsaljrslidfk"
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_azuresql_usgovva_01",
+            "type": "DatasetReference",
+            "parameters": {
+              "schema_name": "dbo",
+              "table_name": "ALJ_RSL_Staging"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_dataverseindividual_usgovva_01",
+            "type": "DatasetReference"
+          }
+        ]
+      },
+      {
+        "name": "Upsert Regional Office Default",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "select first_name as alm_firstname, alj_rsl_id as alm_atmsaljrslidfk from ALJ_rsl_Staging"
+          },
+          "sink": {
+            "type": "CommonDataServiceForAppsSink",
+            "writeBehavior": "upsert",
+            "ignoreNullValues": false,
+            "alternateKeyName": "alm_atmsaljrslidfk"
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_azuresql_usgovva_01",
+            "type": "DatasetReference",
+            "parameters": {
+              "schema_name": "dbo",
+              "table_name": "ALJ_RSL_Staging"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_dataverse_usgovva_01",
+            "type": "DatasetReference",
+            "parameters": {}
+          }
+        ]
+      }
+    ],
+    "parameters": {}
+  }
+}

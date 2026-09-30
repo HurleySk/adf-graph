@@ -1,0 +1,17 @@
+{
+  "name": "Load Mailing List",
+  "properties": {
+    "activities": [
+      {
+        "name": "Get alm_Employee from DataVerse",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": { "referenceName": "DataVerse_To_Azure", "type": "PipelineReference" },
+          "waitOnCompletion": true,
+          "parameters": { "dataverse_entity_name": "alm_employee", "dest_object_name": "Wave3_alm_employee_Staging" }
+        }
+      }
+    ]
+  }
+}

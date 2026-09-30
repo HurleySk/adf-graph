@@ -5,6 +5,10 @@ import { parseCopyActivity } from "./copy.js";
 import { parseStoredProcedureActivity } from "./storedProcedure.js";
 import { parseContainerActivity, isContainerType } from "./container.js";
 import { asString } from "../../utils/expressionValue.js";
+import { EdgeType } from "../../graph/model.js";
+import { makeDatasetId } from "../../utils/nodeId.js";
+
+const DATASET_READER_TYPES = new Set(["Lookup", "GetMetadata"]);
 
 export { ActivityContext } from "./base.js";
 export { processDatasetParams } from "./copy.js";
@@ -41,6 +45,22 @@ export function parseActivity(
     const result = parseStoredProcedureActivity(activity, node);
     edges.push(...result.edges);
     warnings.push(...result.warnings);
+  } else if (DATASET_READER_TYPES.has(activityType)) {
+    const tp = activity.typeProperties as Record<string, unknown> | undefined;
+    const ds = tp?.dataset as Record<string, unknown> | undefined;
+    const refName = asString(ds?.referenceName);
+    if (refName && !refName.startsWith("@")) {
+      edges.push({
+        from: node.id,
+        to: makeDatasetId(refName),
+        type: EdgeType.UsesDataset,
+        metadata: { direction: "input", parameters: ds?.parameters ?? {} },
+      });
+    }
+    const query = (tp?.source as Record<string, unknown> | undefined)?.query;
+    if (typeof query === "string" && query.trim().startsWith("<")) {
+      node.metadata.fetchXmlQuery = query;
+    }
   } else if (isContainerType(activityType)) {
     const result = parseContainerActivity(activity, node, context, parseActivity);
     innerNodes = result.innerNodes;

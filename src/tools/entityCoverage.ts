@@ -1,15 +1,15 @@
 import { Graph, NodeType, EdgeType } from "../graph/model.js";
 import { getActivityMetadata, getColumnMappingMetadata } from "../graph/nodeMetadata.js";
-import { parseActivityId, makeNodeId } from "../utils/nodeId.js";
+import { parseActivityId, makeEntityId } from "../utils/nodeId.js";
 import { asNonDynamic } from "../utils/expressionValue.js";
 import { extractDestQueryAliases } from "../parsers/destQueryParser.js";
-import { resolveDestQueryDefaults } from "./toolUtils.js";
+import { resolveDestQueryDefaults, resolveNode } from "./toolUtils.js";
 
 export interface PipelineCoverageEntry {
   pipeline: string;
   activity: string;
   activityId: string;
-  source: "dest_query" | "column_mapping" | "parameter_default";
+  source: "dest_query" | "column_mapping" | "source_query" | "unresolved" | "parameter_default";
   columns: string[];
   destQuery?: string;
 }
@@ -40,7 +40,7 @@ export function handleEntityCoverage(
   entity: string,
   detail: "summary" | "full" = "summary",
 ): EntityCoverageResult | EntityCoverageSummaryResult {
-  const entityNodeId = makeNodeId(NodeType.DataverseEntity, entity);
+  const entityNodeId = resolveNode(graph, NodeType.DataverseEntity, entity) ?? makeEntityId(entity);
   const entityNode = graph.getNode(entityNodeId);
 
   if (!entityNode) {
@@ -100,6 +100,7 @@ export function handleEntityCoverage(
       });
     } else {
       const mapEdges = graph.getOutgoing(fromNode.id, EdgeType.MapsColumn);
+      const sourceQuery = asNonDynamic(meta.sqlQuery);
       if (mapEdges.length > 0) {
         const columns = mapEdges
           .map((e) => getColumnMappingMetadata(e).sinkColumn)
@@ -110,6 +111,22 @@ export function handleEntityCoverage(
           activityId: fromNode.id,
           source: "column_mapping",
           columns,
+        });
+      } else if (sourceQuery) {
+        entries.push({
+          pipeline,
+          activity,
+          activityId: fromNode.id,
+          source: "source_query",
+          columns: extractDestQueryAliases(sourceQuery).aliases.map((a) => a.alias),
+        });
+      } else {
+        entries.push({
+          pipeline,
+          activity,
+          activityId: fromNode.id,
+          source: "unresolved",
+          columns: [],
         });
       }
     }

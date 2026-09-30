@@ -1,0 +1,31 @@
+{
+  "name": "DataVerse_To_Azure",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy DataVerse To AzureSQL",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": { "type": "CommonDataServiceForAppsSource" },
+          "sink": { "type": "AzureSqlSink" }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_dataverse_usgovva_01",
+            "type": "DatasetReference",
+            "parameters": { "entity_name": { "value": "@pipeline().parameters.dataverse_entity_name", "type": "Expression" } }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_azuresql_usgovva_01",
+            "type": "DatasetReference",
+            "parameters": { "schema_name": "dbo", "table_name": { "value": "@pipeline().parameters.dest_object_name", "type": "Expression" } }
+          }
+        ]
+      }
+    ],
+    "parameters": { "dataverse_entity_name": { "type": "string" }, "dest_object_name": { "type": "string" } }
+  }
+}

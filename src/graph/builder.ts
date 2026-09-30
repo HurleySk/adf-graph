@@ -9,6 +9,7 @@ import { ParseResult } from "../parsers/parseResult.js";
 import { extractColumnMappings } from "../parsers/columns.js";
 import { getNestedActivities } from "../parsers/activities/container.js";
 import { parseDatasetFile } from "../parsers/dataset.js";
+import { resolveEntityReferences } from "./entityResolution.js";
 import { parseLinkedServiceFile } from "../parsers/linkedService.js";
 import { scanSqlDirectory } from "../parsers/sql.js";
 import { parseSpBody } from "../parsers/spColumnParser.js";
@@ -139,6 +140,9 @@ export function buildGraph(rootPath: string, schemaPath?: string): BuildResult {
 
   // ── Pass 2: Datasets ─────────────────────────────────────────────────────
   processJsonDirectory(rootPath, ADF_DIRS.DATASET, parseDatasetFile, graph, warnings);
+
+  // ── Pass 2b: Activity → Dataverse entity edges resolved through datasets ──
+  resolveEntityReferences(graph);
 
   // ── Pass 3: Linked Services ───────────────────────────────────────────────
   processJsonDirectory(rootPath, ADF_DIRS.LINKED_SERVICE, parseLinkedServiceFile, graph, warnings);

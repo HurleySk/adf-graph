@@ -1,0 +1,77 @@
+{
+  "name": "Load Individual to Employee",
+  "properties": {
+    "activities": [
+      {
+        "name": "For Each Batch",
+        "type": "ForEach",
+        "typeProperties": {
+          "items": {
+            "value": "@range(0,2)",
+            "type": "Expression"
+          },
+          "activities": [
+            {
+              "name": "If Has Rows",
+              "type": "IfCondition",
+              "typeProperties": {
+                "expression": {
+                  "value": "@true",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
+                  {
+                    "name": "Individual to Employee",
+                    "type": "Copy",
+                    "dependsOn": [],
+                    "typeProperties": {
+                      "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "select first_name as alm_firstname, alj_rsl_id as alm_atmsaljrslidfk from ALJ_rsl_Staging"
+                      },
+                      "sink": {
+                        "type": "CommonDataServiceForAppsSink",
+                        "writeBehavior": "upsert",
+                        "ignoreNullValues": false,
+                        "alternateKeyName": "alm_atmsaljrslidfk"
+                      },
+                      "enableStaging": false,
+                      "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true
+                      }
+                    },
+                    "inputs": [
+                      {
+                        "referenceName": "ds_azuresql_usgovva_01",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "schema_name": "dbo",
+                          "table_name": "ALJ_RSL_Staging"
+                        }
+                      }
+                    ],
+                    "outputs": [
+                      {
+                        "referenceName": "ds_dataverse_usgovva_01",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "entity_name": {
+                            "value": "Alm_Employee",
+                            "type": "Expression"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ifFalseActivities": []
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": {}
+  }
+}

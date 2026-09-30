@@ -1,0 +1,78 @@
+{
+  "name": "Delta Load Individual to Employee",
+  "properties": {
+    "activities": [
+      {
+        "name": "Switch Mode",
+        "type": "Switch",
+        "typeProperties": {
+          "on": {
+            "value": "@pipeline().parameters.mode",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "delta",
+              "activities": [
+                {
+                  "name": "Delta Individual to Employee",
+                  "type": "Copy",
+                  "dependsOn": [],
+                  "typeProperties": {
+                    "source": {
+                      "type": "AzureSqlSource",
+                      "sqlReaderQuery": "select first_name as alm_firstname, alj_rsl_id as alm_atmsaljrslidfk from ALJ_rsl_Staging"
+                    },
+                    "sink": {
+                      "type": "CommonDataServiceForAppsSink",
+                      "writeBehavior": "upsert",
+                      "ignoreNullValues": false,
+                      "alternateKeyName": "alm_atmsaljrslidfk"
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                      "type": "TabularTranslator",
+                      "typeConversion": true
+                    }
+                  },
+                  "inputs": [
+                    {
+                      "referenceName": "ds_azuresql_usgovva_01",
+                      "type": "DatasetReference",
+                      "parameters": {
+                        "schema_name": "dbo",
+                        "table_name": "ALJ_RSL_Staging"
+                      }
+                    }
+                  ],
+                  "outputs": [
+                    {
+                      "referenceName": "ds_dynamic_dataverse_usgovva",
+                      "type": "DatasetReference",
+                      "parameters": {
+                        "target_entity": "alm_employee",
+                        "service_uri": {
+                          "value": "@pipeline().parameters.service_uri",
+                          "type": "Expression"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "defaultActivities": []
+        }
+      }
+    ],
+    "parameters": {
+      "mode": {
+        "type": "string"
+      },
+      "service_uri": {
+        "type": "string"
+      }
+    }
+  }
+}

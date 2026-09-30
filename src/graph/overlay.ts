@@ -5,6 +5,7 @@ import { Graph, GraphNode, GraphEdge } from "./model.js";
 import { parsePipelineFile } from "../parsers/pipeline.js";
 import { parseDatasetFile } from "../parsers/dataset.js";
 import { buildGraph } from "./builder.js";
+import { resolveEntityReferences } from "./entityResolution.js";
 
 const DATASET_TYPES = new Set([
   "AzureSqlTable", "SqlServerTable", "AzureBlobStorage", "AzureBlobFSLocation",
@@ -171,6 +172,8 @@ export function mergeOverlayInto(target: Graph, overlay: Graph): void {
   for (const edge of overlayEdges) {
     target.addEdge(edge);
   }
+
+  resolveEntityReferences(target);
 
   // Deduplicate edges by (from, to, type) after merging
   deduplicateEdges(target);
