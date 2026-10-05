@@ -123,3 +123,14 @@ export function parenDepthMap(sql: string): Int16Array {
   }
   return depth;
 }
+
+export function stripCommentsAndStrings(sql: string): string {
+  return stripSqlComments(sql).replace(/'[^']*'/g, "''");
+}
+
+export function collectCteNames(sql: string): Set<string> {
+  const names = new Set<string>();
+  const re = /(?:\bWITH|\)\s*,)\s*(?:\[([^\]]+)\]|(\w+))\s*(?:\([^()]*\)\s*)?AS\s*\(/gi;
+  for (const m of sql.matchAll(re)) names.add((m[1] ?? m[2]).toLowerCase());
+  return names;
+}

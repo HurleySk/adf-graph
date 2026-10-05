@@ -27,7 +27,7 @@ export interface SpParseResult {
   confidence: "high" | "medium" | "low";
 }
 
-import { stripSqlComments, splitTopLevelCommas, parenDepthMap, scanTopLevel, isKeywordAt } from "./sqlLex.js";
+import { splitTopLevelCommas, parenDepthMap, scanTopLevel, isKeywordAt, stripCommentsAndStrings, collectCteNames } from "./sqlLex.js";
 
 /* ──────────────────────────── helpers ──────────────────────────── */
 
@@ -80,10 +80,6 @@ function extractInnermostColumn(expr: string): string {
  */
 function isSimpleColumnRef(expr: string): boolean {
   return /^(?:\[?\w+\]?\.)*\[?\w+\]?$/.test(expr.trim());
-}
-
-function stripCommentsAndStrings(sql: string): string {
-  return stripSqlComments(sql).replace(/'[^']*'/g, "''");
 }
 
 type StatementResult = {
@@ -358,13 +354,6 @@ function parseMergeStatements(sql: string): StatementResult {
   }
 
   return { mappings, readTables, writeTables, parsed };
-}
-
-function collectCteNames(sql: string): Set<string> {
-  const names = new Set<string>();
-  const re = /(?:\bWITH|\)\s*,)\s*(?:\[([^\]]+)\]|(\w+))\s*(?:\([^()]*\)\s*)?AS\s*\(/gi;
-  for (const m of sql.matchAll(re)) names.add((m[1] ?? m[2]).toLowerCase());
-  return names;
 }
 
 /* ──────────────────────────── main entry point ──────────────────────────── */

@@ -1,5 +1,5 @@
 import { GraphNode, GraphEdge } from "../graph/model.js";
-import { parenDepthMap } from "./sqlLex.js";
+import { parenDepthMap, stripCommentsAndStrings, collectCteNames } from "./sqlLex.js";
 
 export interface ParseResult {
   nodes: GraphNode[];
@@ -44,13 +44,14 @@ export interface TableRef {
  * Callers can distinguish main tables (depth 0) from subquery tables (depth > 0).
  */
 export function extractAllTablesFromSql(sql: string): TableRef[] {
+  const cleaned = stripCommentsAndStrings(sql);
+  const ctes = collectCteNames(cleaned);
   const regex = /\b(?:FROM|JOIN)\s+\[?(\w+)\]?(?:\.\[?(\w+)\]?)?/gi;
   const results: TableRef[] = [];
-
-  const depthArr = parenDepthMap(sql);
-
+  const depthArr = parenDepthMap(cleaned);
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(sql)) !== null) {
+  while ((match = regex.exec(cleaned)) !== null) {
+    if (!match[2] && ctes.has(match[1].toLowerCase())) continue;
     const ref = resolveTableRef(match);
     if (ref) results.push({ table: ref, depth: depthArr[match.index] });
   }
