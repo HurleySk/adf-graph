@@ -33,7 +33,7 @@ export interface CaseValue {
  * depth 0. Falls back to the first SELECT at any depth when the whole
  * statement is wrapped in parentheses.
  */
-function findOuterSelectIndex(sql: string): number {
+export function findOuterSelectIndex(sql: string): number {
   let firstAnyDepth = -1;
   const topLevel = scanSql(sql, (i, depth) => {
     if (!isKeywordAt(sql, i, "SELECT")) return;
