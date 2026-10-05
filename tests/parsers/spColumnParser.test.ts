@@ -476,3 +476,23 @@ UPDATE t SET t.flag = 1 FROM dbo.Target t WITH (NOLOCK) JOIN dbo.Staff s ON s.id
     });
   });
 });
+
+describe("per-column source tables", () => {
+  it("INSERT ... SELECT takes each column's table from its alias", () => {
+    const r = parseSpBody("p", `INSERT INTO dbo.Out (A, B) SELECT x.Col1, y.Col2 FROM dbo.X x JOIN dbo.Y y ON x.Id = y.Id`);
+    expect(r.mappings.map((m) => [m.targetColumn, m.sourceTable, m.sourceColumn])).toEqual([
+      ["A", "dbo.X", "Col1"],
+      ["B", "dbo.Y", "Col2"],
+    ]);
+  });
+
+  it("UPDATE ... FROM takes the table of the source alias", () => {
+    const r = parseSpBody("p", `UPDATE t SET t.A = s.B FROM dbo.T t JOIN dbo.S s ON s.Id = t.Id`);
+    expect(r.mappings).toEqual([{ sourceTable: "dbo.S", sourceColumn: "B", targetTable: "dbo.T", targetColumn: "A" }]);
+  });
+
+  it("UPDATE without FROM keeps the target as source", () => {
+    const r = parseSpBody("p", `UPDATE dbo.T SET A = UPPER(B)`);
+    expect(r.mappings[0]).toMatchObject({ sourceTable: "dbo.T", sourceColumn: "B", targetTable: "dbo.T", targetColumn: "A" });
+  });
+});

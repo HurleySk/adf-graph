@@ -28,6 +28,7 @@ export interface SpParseResult {
 }
 
 import { splitTopLevelCommas, parenDepthMap, scanTopLevel, isKeywordAt, stripCommentsAndStrings, collectCteNames } from "./sqlLex.js";
+import { parseFromClause, resolveRefs } from "./selectResolver.js";
 
 /* ──────────────────────────── helpers ──────────────────────────── */
 
@@ -89,18 +90,26 @@ type StatementResult = {
   parsed: number;
 };
 
+function sourceTableFor(expr: string, column: string, fromClause: string | undefined, fallback: string): string {
+  if (!fromClause) return fallback;
+  const refs = resolveRefs(expr, parseFromClause(fromClause));
+  const hit = refs.find((r) => r.table && r.column.toLowerCase() === column.toLowerCase()) ?? refs.find((r) => r.table);
+  return hit?.table ?? fallback;
+}
+
 function pushMapping(
   mappings: SpColumnMapping[],
   sourceTable: string,
   targetTable: string,
   targetColumn: string,
   rawExpr: string,
+  fromClause?: string,
 ): void {
   const expr = rawExpr.trim();
   const sourceColumn = extractInnermostColumn(expr);
   if (/^\d+$/.test(sourceColumn) || sourceColumn === "") return;
   mappings.push({
-    sourceTable,
+    sourceTable: sourceTableFor(expr, sourceColumn, fromClause, sourceTable),
     sourceColumn,
     targetTable,
     targetColumn,
@@ -113,12 +122,13 @@ function pushSetAssignments(
   setClause: string,
   sourceTable: string,
   targetTable: string,
+  fromClause?: string,
 ): void {
   for (const assignment of splitTopLevelCommas(setClause)) {
     const eqIdx = assignment.indexOf("=");
     if (eqIdx === -1) continue;
     const targetColumn = normalizeName(assignment.slice(0, eqIdx).trim()).split(".").pop()!;
-    pushMapping(mappings, sourceTable, targetTable, targetColumn, assignment.slice(eqIdx + 1));
+    pushMapping(mappings, sourceTable, targetTable, targetColumn, assignment.slice(eqIdx + 1), fromClause);
   }
 }
 
@@ -128,12 +138,13 @@ function pushPositional(
   exprList: string,
   sourceTable: string,
   targetTable: string,
+  fromClause?: string,
 ): void {
   const cols = splitTopLevelCommas(colList);
   const exprs = splitTopLevelCommas(exprList);
   const count = Math.min(cols.length, exprs.length);
   for (let i = 0; i < count; i++) {
-    pushMapping(mappings, sourceTable, targetTable, normalizeName(cols[i]), exprs[i]);
+    pushMapping(mappings, sourceTable, targetTable, normalizeName(cols[i]), exprs[i], fromClause);
   }
 }
 
@@ -230,10 +241,12 @@ function parseUpdateStatements(sql: string): StatementResult {
 
     let sources: FromSource[] = [];
     let cursor = setEnd;
+    let fromClause: string | undefined;
     if (isKeywordAt(sql, cursor, "FROM")) {
       const fromStart = cursor + 4;
       cursor = clauseEnd(sql, fromStart, FROM_CLAUSE_STOPS);
-      sources = parseFromSources(sql.slice(fromStart, cursor).trim());
+      fromClause = sql.slice(fromStart, cursor).trim();
+      sources = parseFromSources(fromClause);
     }
     let whereClause = "";
     if (isKeywordAt(sql, cursor, "WHERE")) {
@@ -255,7 +268,7 @@ function parseUpdateStatements(sql: string): StatementResult {
       if (src.table !== targetTable) readTables.push(src.table);
     }
 
-    pushSetAssignments(mappings, setClause, targetTable, targetTable);
+    pushSetAssignments(mappings, setClause, targetTable, targetTable, fromClause);
   }
 
   return { mappings, readTables, writeTables, parsed };
@@ -293,7 +306,7 @@ function parseInsertSelectStatements(sql: string): StatementResult {
     readTables.push(sourceTable);
     parsed++;
 
-    pushPositional(mappings, match[2], sql.slice(selectStart, selectEnd), sourceTable, targetTable);
+    pushPositional(mappings, match[2], sql.slice(selectStart, selectEnd), sourceTable, targetTable, sql.slice(selectEnd + 4, statementEnd));
   }
 
   const targetRegex = new RegExp(
