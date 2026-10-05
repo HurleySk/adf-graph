@@ -1,0 +1,64 @@
+{
+  "name": "Load Thing",
+  "properties": {
+    "activities": [
+      {
+        "name": "Thing Staging",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": { "type": "SqlServerSource", "sqlReaderQuery": "SELECT t.Thing_Id, t.Thing_Name, t.Status_Cd, t.Created_Dt, t.Owner_fk FROM dbo.Thing t" },
+          "sink": { "type": "AzureSqlSink" }
+        },
+        "inputs": [{ "referenceName": "ds_onprem_sql", "type": "DatasetReference" }],
+        "outputs": [{ "referenceName": "ds_azuresql", "type": "DatasetReference", "parameters": { "schema_name": "dbo", "table_name": "Wave3_Thing_Staging" } }]
+      },
+      {
+        "name": "Get owner from DataVerse",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": { "source": { "type": "CommonDataServiceForAppsSource" }, "sink": { "type": "AzureSqlSink" } },
+        "inputs": [{ "referenceName": "ds_dataverse", "type": "DatasetReference", "parameters": { "entity_name": "alm_owner" } }],
+        "outputs": [{ "referenceName": "ds_azuresql", "type": "DatasetReference", "parameters": { "schema_name": "dbo", "table_name": "DataVerse_alm_owner_Staging" } }]
+      },
+      {
+        "name": "Transform Thing",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [{ "activity": "Thing Staging", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": { "storedProcedureName": "[dbo].[p_Thing_Transform]" }
+      },
+      {
+        "name": "Thing to Dataverse",
+        "type": "Copy",
+        "dependsOn": [{ "activity": "Transform Thing", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "SELECT a.Thing_Id AS alm_atmsthingidfk, a.Clean_Name AS alm_thingname, CASE WHEN a.Status_Cd = 'A' THEN 455780000 ELSE 455780001 END AS alm_status, DATEADD(HOUR, 12, CAST(CAST(a.Created_Dt AS DATE) AS DATETIME)) AS alm_createddate, b.alm_ownerid AS alm_ownerid, 'Migrated' AS alm_source, Owner_fk AS alm_ownerkey FROM dbo.Wave3_Thing_Staging a LEFT JOIN dbo.DataVerse_alm_owner_Staging b ON a.Owner_fk = b.alm_atmsowneridfk"
+          },
+          "sink": { "type": "CommonDataServiceForAppsSink", "writeBehavior": "upsert" }
+        },
+        "inputs": [{ "referenceName": "ds_azuresql", "type": "DatasetReference", "parameters": { "schema_name": "dbo", "table_name": "Wave3_Thing_Staging" } }],
+        "outputs": [{ "referenceName": "ds_dataverse", "type": "DatasetReference", "parameters": { "entity_name": "alm_thing" } }]
+      },
+      {
+        "name": "Thing Note to Dataverse",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": { "type": "AzureSqlSource", "sqlReaderQuery": "SELECT Thing_Id AS src_id, Thing_Name AS src_name FROM dbo.Wave3_Thing_Staging" },
+          "sink": { "type": "CommonDataServiceForAppsSink", "writeBehavior": "upsert" },
+          "translator": {
+            "type": "TabularTranslator",
+            "mappings": [
+              { "source": { "name": "src_id" }, "sink": { "name": "alm_atmsthingidfk" } },
+              { "source": { "name": "src_name" }, "sink": { "name": "alm_notetext" } }
+            ]
+          }
+        },
+        "inputs": [{ "referenceName": "ds_azuresql", "type": "DatasetReference", "parameters": { "schema_name": "dbo", "table_name": "Wave3_Thing_Staging" } }],
+        "outputs": [{ "referenceName": "ds_dataverse", "type": "DatasetReference", "parameters": { "entity_name": "alm_thingnote" } }]
+      }
+    ]
+  }
+}

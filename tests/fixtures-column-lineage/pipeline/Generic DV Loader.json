@@ -1,0 +1,19 @@
+{
+  "name": "Generic DV Loader",
+  "properties": {
+    "parameters": { "dataverse_entity_name": { "type": "string" }, "dest_query": { "type": "string" } },
+    "activities": [
+      {
+        "name": "Copy To Dataverse",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": { "type": "AzureSqlSource", "sqlReaderQuery": { "value": "@pipeline().parameters.dest_query", "type": "Expression" } },
+          "sink": { "type": "CommonDataServiceForAppsSink", "writeBehavior": "upsert" }
+        },
+        "inputs": [],
+        "outputs": [{ "referenceName": "ds_dataverse", "type": "DatasetReference", "parameters": { "entity_name": { "value": "@pipeline().parameters.dataverse_entity_name", "type": "Expression" } } }]
+      }
+    ]
+  }
+}

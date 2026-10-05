@@ -2,6 +2,7 @@ import { getColumnMappingMetadata } from "../graph/nodeMetadata.js";
 import { Graph, EdgeType, GraphEdge, NodeType } from "../graph/model.js";
 import { makeAttributeId } from "../utils/nodeId.js";
 import { resolveEntityOrTableNode } from "./toolUtils.js";
+import { handleColumnLineage } from "./columnLineage.js";
 
 export type LineageDirection = "upstream" | "downstream";
 
@@ -346,6 +347,17 @@ export function handleDataLineage(
               }
             }
           }
+        }
+      }
+      if (direction === "upstream") {
+        for (const r of handleColumnLineage(graph, entityName).rows) {
+          if (r.attribute.toLowerCase() !== attribute.toLowerCase()) continue;
+          const first = r.staging[0];
+          if (columnMappings.some((m) => m.activityId === r.activityId && m.sinkColumn === r.attribute)) continue;
+          const mapping: ColumnMapping = { activityId: r.activityId, sourceColumn: first?.column ?? null, sinkColumn: r.attribute };
+          if (first) mapping.sourceTable = first.table;
+          if (r.expression !== first?.column) mapping.transformExpression = r.expression;
+          columnMappings.push(mapping);
         }
       }
     }

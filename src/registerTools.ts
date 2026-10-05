@@ -8,6 +8,7 @@ import { handleFindConsumers } from "./tools/consumers.js";
 import { handleDescribePipeline } from "./tools/describe.js";
 import { handleImpactAnalysis } from "./tools/impact.js";
 import { handleDataLineage } from "./tools/lineage.js";
+import { handleColumnLineage } from "./tools/columnLineage.js";
 import { handleFindPaths } from "./tools/paths.js";
 import { handleDiffPipeline } from "./tools/diff.js";
 import { handleAddOverlay } from "./tools/addOverlay.js";
@@ -215,6 +216,16 @@ export function registerTools(server: McpServer, manager: GraphManager): void {
       }
       return seeAlso(result, [...names]);
     },
+  );
+
+  envTool(
+    "graph_column_lineage",
+    "Column lineage for a Dataverse entity: for each attribute a pipeline writes, the expression, the staging columns it reads, the legacy table.column behind them (through source queries and stored procedure mappings), the lookup entity and join, and an inferred rule (Direct, Lookup, Choice map, Derived, Constant, Date conversion).",
+    {
+      entity: z.string().describe("Dataverse entity logical name, e.g. alm_esubscription"),
+      pipeline: z.string().optional().describe("Limit to one pipeline and the pipelines it executes"),
+    },
+    ({ entity, pipeline }, { graph }) => handleColumnLineage(graph, entity, pipeline),
   );
 
   envTool(

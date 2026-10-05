@@ -1,0 +1,31 @@
+{
+  "name": "Load Gadget",
+  "properties": {
+    "activities": [
+      {
+        "name": "Gadget Staging",
+        "type": "Copy",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": { "type": "SqlServerSource", "sqlReaderQuery": "SELECT g.Gadget_Id, g.Gadget_Nm FROM dbo.Gadget g" },
+          "sink": { "type": "AzureSqlSink" }
+        },
+        "inputs": [{ "referenceName": "ds_onprem_sql", "type": "DatasetReference" }],
+        "outputs": [{ "referenceName": "ds_azuresql", "type": "DatasetReference", "parameters": { "schema_name": "dbo", "table_name": "Wave3_Gadget_Staging" } }]
+      },
+      {
+        "name": "Gadget to Dataverse",
+        "type": "ExecutePipeline",
+        "dependsOn": [{ "activity": "Gadget Staging", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "pipeline": { "referenceName": "Generic DV Loader", "type": "PipelineReference" },
+          "waitOnCompletion": true,
+          "parameters": {
+            "dataverse_entity_name": "alm_gadget",
+            "dest_query": "SELECT s.Gadget_Id AS alm_atmsgadgetidfk, s.Gadget_Nm AS alm_gadgetname FROM dbo.Wave3_Gadget_Staging s"
+          }
+        }
+      }
+    ]
+  }
+}

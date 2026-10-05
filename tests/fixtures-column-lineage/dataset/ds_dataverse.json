@@ -1,0 +1,9 @@
+{
+  "name": "ds_dataverse",
+  "properties": {
+    "linkedServiceName": { "referenceName": "LS_DATAVERSE", "type": "LinkedServiceReference" },
+    "parameters": { "entity_name": { "type": "string" } },
+    "type": "CommonDataServiceForAppsEntity",
+    "typeProperties": { "entityName": { "value": "@dataset().entity_name", "type": "Expression" } }
+  }
+}

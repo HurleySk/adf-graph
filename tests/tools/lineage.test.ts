@@ -157,3 +157,13 @@ describe("lineage with schema data", () => {
     expect(result.columnMappings.some((m) => m.sinkColumn === "alm_name" && m.sourceColumn === "org_name")).toBe(true);
   });
 });
+
+describe("data lineage column mappings from aliases", () => {
+  it("lists the staging column behind an alias-mapped attribute", () => {
+    const { graph } = buildGraph(join(import.meta.dirname, "../fixtures-column-lineage"));
+    const r = handleDataLineage(graph, "alm_thing", { attribute: "alm_status" }) as DataLineageResult;
+    expect(r.columnMappings).toContainEqual(expect.objectContaining({
+      sinkColumn: "alm_status", sourceTable: "dbo.Wave3_Thing_Staging", sourceColumn: "Status_Cd",
+    }));
+  });
+});
