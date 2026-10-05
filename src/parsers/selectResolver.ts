@@ -178,17 +178,33 @@ export function parseFromClause(from: string, ctes: Map<string, string> = new Ma
   return sources;
 }
 
-function throughSource(src: SelectSource, column: string, depth: number): ColumnRef[] {
+function throughSource(src: SelectSource, column: string, depth: number, ctes: Map<string, string>): ColumnRef[] {
   const qualifier = src.alias || null;
   if (src.derivedSql === undefined) return [{ qualifier, column, table: src.table, derived: false }];
   if (depth >= MAX_DEPTH) return [{ qualifier, column, table: null, derived: true }];
-  const inner = resolveSelect(src.derivedSql, depth + 1);
+  const inner = resolveSelect(src.derivedSql, depth + 1, ctes);
   const item = inner.items.find((it) => it.alias.toLowerCase() === column.toLowerCase());
   if (!item) return [{ qualifier, column, table: null, derived: true }];
   return item.refs.map((r) => ({ ...r, qualifier, derived: true }));
 }
 
-export function resolveRefs(expression: string, sources: SelectSource[], depth = 0): ColumnRef[] {
+function ownerOf(column: string, sources: SelectSource[], depth: number, ctes: Map<string, string>): SelectSource | undefined {
+  if (sources.length === 1) return sources[0];
+  if (depth >= MAX_DEPTH) return undefined;
+  const owners = sources.filter(
+    (s) =>
+      s.derivedSql !== undefined &&
+      resolveSelect(s.derivedSql, depth + 1, ctes).items.some((it) => it.alias.toLowerCase() === column.toLowerCase()),
+  );
+  return owners.length === 1 ? owners[0] : undefined;
+}
+
+export function resolveRefs(
+  expression: string,
+  sources: SelectSource[],
+  depth = 0,
+  ctes: Map<string, string> = new Map(),
+): ColumnRef[] {
   const text = stripStrings(expression);
   const refs: ColumnRef[] = [];
   const seen = new Set<string>();
@@ -204,12 +220,13 @@ export function resolveRefs(expression: string, sources: SelectSource[], depth =
     const column = unquoteIdent(m[2]);
     const src = sources.find((s) => s.alias.toLowerCase() === qualifier.toLowerCase());
     if (!src) add({ qualifier, column, table: null, derived: false });
-    else for (const r of throughSource(src, column, depth)) add(r);
+    else for (const r of throughSource(src, column, depth, ctes)) add(r);
   }
   for (const m of text.replace(QUALIFIED_REF, " ").matchAll(BARE_REF)) {
     const column = unquoteIdent(m[1]);
     if (NOT_COLUMN.has(column.toUpperCase())) continue;
-    if (sources.length === 1) for (const r of throughSource(sources[0], column, depth)) add(r);
+    const owner = ownerOf(column, sources, depth, ctes);
+    if (owner) for (const r of throughSource(owner, column, depth, ctes)) add(r);
     else add({ qualifier: null, column, table: null, derived: false });
   }
   return refs;
@@ -233,13 +250,14 @@ function splitItem(part: string): { alias: string; expression: string } | null {
   return null;
 }
 
-export function resolveSelect(sql: string, depth = 0): ResolvedSelect {
+export function resolveSelect(sql: string, depth = 0, outerCtes: Map<string, string> = new Map()): ResolvedSelect {
   const warnings: string[] = [];
   const cleaned = stripSqlComments(sql);
   const selectIdx = findOuterSelectIndex(cleaned);
   if (selectIdx === -1) return { items: [], sources: [], star: false, warnings: ["no SELECT found"] };
   const list = (extractSelectClause(cleaned) ?? "").replace(/^\s*DISTINCT\s+/i, "");
-  const sources = parseFromClause(fromClauseOf(cleaned, selectIdx), cteBodies(cleaned));
+  const ctes = new Map([...outerCtes, ...cteBodies(cleaned)]);
+  const sources = parseFromClause(fromClauseOf(cleaned, selectIdx), ctes);
   const items: SelectItem[] = [];
   let star = false;
   for (const part of splitTopLevelCommas(list)) {
@@ -255,7 +273,7 @@ export function resolveSelect(sql: string, depth = 0): ResolvedSelect {
     items.push({
       alias: split.alias,
       expression: split.expression,
-      refs: resolveRefs(split.expression, sources, depth),
+      refs: resolveRefs(split.expression, sources, depth, ctes),
       isCase: /^CASE\b/i.test(split.expression),
     });
   }

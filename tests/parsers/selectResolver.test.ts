@@ -94,6 +94,16 @@ describe("resolveSelect edge cases", () => {
     expect(r.items[0].refs.map((x) => x.column)).toEqual(["Dt"]);
   });
 
+  it("resolves an unqualified column through the one derived source that outputs it", () => {
+    const r = resolveSelect(`WITH c AS (SELECT a.Id, a.Nm FROM dbo.T a) SELECT Nm AS alm_name, t2.X AS alm_x FROM c LEFT JOIN dbo.U t2 ON c.Id = t2.Id`);
+    expect(r.items[0].refs).toEqual([{ qualifier: "c", column: "Nm", table: "dbo.T", derived: true }]);
+  });
+
+  it("follows a CTE that reads an earlier CTE", () => {
+    const r = resolveSelect(`WITH w AS (SELECT Id, Dt FROM dbo.W), c AS (SELECT a.Id, w.Dt FROM dbo.T a LEFT JOIN w ON w.Id = a.Id) SELECT c.Dt AS alm_dt FROM c`);
+    expect(r.items[0].refs).toEqual([{ qualifier: "c", column: "Dt", table: "dbo.W", derived: true }]);
+  });
+
   it("flags a star select", () => {
     expect(resolveSelect(`SELECT t.* FROM dbo.T t`)).toMatchObject({ items: [], star: true, warnings: [] });
     expect(resolveSelect(`SELECT t.Id FROM dbo.T t`).star).toBe(false);
