@@ -82,6 +82,15 @@ describe("parseSchemaIndex", () => {
     expect(result.entityCount).toBe(2);
   });
 
+  it("prefers an _index.json inside the env directory over the parent index", () => {
+    const result = parseSchemaIndex(join(fixtureDir, "env-indexed"));
+    const entityIds = result.nodes
+      .filter((n) => n.type === NodeType.DataverseEntity)
+      .map((n) => n.id);
+    expect(entityIds).toEqual(["dataverse_entity:businessunit"]);
+    expect(result.entityCount).toBe(1);
+  });
+
   it("returns a warning when _index.json is not found", () => {
     const result = parseSchemaIndex("/nonexistent/path/test-env");
     expect(result.warnings.length).toBeGreaterThan(0);

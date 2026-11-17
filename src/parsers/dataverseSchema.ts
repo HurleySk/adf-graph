@@ -58,7 +58,8 @@ export function parseSchemaIndex(schemaPath: string): SchemaParseResult {
   const edges: GraphEdge[] = [];
   const warnings: string[] = [];
 
-  const indexPath = join(dirname(schemaPath), "_index.json");
+  const envIndexPath = join(schemaPath, "_index.json");
+  const indexPath = existsSync(envIndexPath) ? envIndexPath : join(dirname(schemaPath), "_index.json");
 
   if (!existsSync(indexPath)) {
     warnings.push(`_index.json not found at: ${indexPath}`);

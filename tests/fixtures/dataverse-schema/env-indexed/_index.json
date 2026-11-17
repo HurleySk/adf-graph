@@ -1,0 +1,17 @@
+{
+  "generated": "2026-01-01T00:00:00Z",
+  "entityCount": 1,
+  "entities": [
+    {
+      "logicalName": "businessunit",
+      "displayName": "Business Unit",
+      "entitySetName": "businessunits",
+      "description": "Business unit entity",
+      "primaryId": "businessunitid",
+      "primaryName": "name",
+      "attributeCount": 3,
+      "file": "businessunit.json",
+      "attributes": "businessunitid, name, parentbusinessunitid"
+    }
+  ]
+}
